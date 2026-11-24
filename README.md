@@ -3,21 +3,26 @@
 [![CI](https://github.com/projectbin07-stack/robot-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/projectbin07-stack/robot-studio/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Open any robot model in the browser: a URDF or xacro file, a whole ROS
-description package or a zip. Robot Studio expands the xacro itself, checks
-the model, and shows it in 3D with its meshes and joint sliders. No ROS
-install, no upload.
+Open or build a robot model in the browser. Open a URDF or xacro file, a
+whole ROS description package or a zip: Robot Studio expands the xacro
+itself, checks the model, and shows it in 3D with its meshes and joint
+sliders. Or build one: start from a mecanum, differential or arm template,
+edit links and joints, and export URDF, xacro, a mecanum-kinematics config
+or a ROS 2 description package. No ROS install, no upload.
 
 **Live:** <https://projectbin07-stack.github.io/robot-studio/>
 
-> **Validation status (v0.1.0):** software tests only. xacro output is
-> compared with the official `xacro` in CI on 38 inputs: of the 16
-> successful expansions, 14 are byte-identical (including all three
-> third-party robot descriptions) and 2 differ only in the last bit of 4
-> numbers computed with `sin`/`cos`. No simulation results exist yet, and nothing has been run
-> against real robot hardware. See [Validation status](#validation-status).
+> **Validation status (v0.2.0):** software tests only. xacro output is
+> compared with the official `xacro` in CI on 45 inputs (21 of 23
+> successful expansions byte-identical, 2 within 1 ulp). The builder's
+> exports are checked against other tools in CI: the official xacro expands
+> the exported xacro to the exported URDF, mecanum-kinematics loads the
+> exported TOML and agrees with Robot Studio's kinematics, and exported ROS 2
+> packages build with colcon in `ros:humble-ros-base`. No simulation results
+> exist yet, and nothing has been run against real robot hardware. See
+> [Validation status](#validation-status).
 
-![studio_mecanum example in the light theme: model panel with xacro arguments, 3D view with meshes, joint sliders and findings](docs/img/mecanum-light.png)
+![Builder in the light theme: mecanum template robot with a wheel selected, template parameters on the left, properties panel on the right](docs/img/builder-mecanum-light.png)
 
 ## What it is and where it is going
 
@@ -25,11 +30,12 @@ Robot Studio is the flagship of this account's robotics tools: one browser
 app that ties together the separate repositories instead of duplicating
 them. It is built in five milestones ([ROADMAP](docs/ROADMAP.md)):
 
-1. **Model (this release):** open any model; xacro expansion; 3D view with
+1. **Model (0.1):** open any model; xacro expansion; 3D view with
    meshes; live checks from [urdf-inspector](https://github.com/projectbin07-stack/urdf-inspector).
-2. **Builder:** create and edit links and joints, templates (mecanum, diff
-   drive, arm), export URDF, xacro and a
-   [mecanum-kinematics](https://github.com/projectbin07-stack/mecanum-kinematics) config.
+2. **Builder (0.2, this release):** create and edit links and joints,
+   templates (mecanum, diff drive, arm) with sensor mounts, export URDF,
+   xacro, a [mecanum-kinematics](https://github.com/projectbin07-stack/mecanum-kinematics)
+   config and a ROS 2 package.
 3. **Simulation:** drive kinematics, LiDAR (from
    [lidar-slam-lab](https://github.com/projectbin07-stack/lidar-slam-lab)),
    IMU, encoders, TF and plots, always labelled simulated.
@@ -38,7 +44,38 @@ them. It is built in five milestones ([ROADMAP](docs/ROADMAP.md)):
 5. **Release polish:** docs, performance budget, accessibility, upstream
    fixes.
 
-## Features in 0.1
+## Builder (new in 0.2)
+
+- **Templates:** four-wheel mecanum base, differential base with caster,
+  serial arm with 1 to 50 revolute joints. Dimensions, wheel radius and
+  width, wheelbase, track, masses and limits are parameters; LiDAR, IMU,
+  camera and depth camera mounts are switched on and placed by you. Every
+  template robot has no errors or warnings from urdf-inspector's checks.
+- **Edit anything:** select a link or joint in the 3D view or the tree and
+  edit it in the Properties panel (numeric fields): name (references
+  follow), joint type, parent (re-parent keeps the world pose), origin,
+  axis, limits, geometry, colour, mass, inertia. Add child, add sensor,
+  duplicate and delete subtrees. Undo/redo with Ctrl+Z / Ctrl+Y; Delete
+  removes the selected link. Checks and the 3D view update after every edit.
+- **Edit an opened model:** any URDF, xacro, package folder or zip becomes
+  an editable robot (its expansion; meshes still resolve).
+- **Inertia from geometry** with urdf-inspector's formulas, rotated with
+  the shape (so it passes the `inertia-axes` check).
+- **Exports:** URDF; xacro with the template parameters as
+  `xacro:property` and sensor switches as `xacro:arg`; a
+  mecanum-kinematics TOML for mecanum bases; a ROS 2 description package as
+  a zip (package.xml, CMakeLists.txt, urdf/, meshes/, launch file with
+  robot_state_publisher, joint_state_publisher_gui and RViz).
+- **Autosave** of the working robot in this browser's local storage
+  (`?s=builder` restores it); never uploaded.
+
+Details, formats and how each export is verified: [docs/builder.md](docs/builder.md).
+
+| Arm template, dark theme                                                   | Imported R2D2 tutorial robot being edited                                         |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| ![Six-joint arm template in the dark theme](docs/img/builder-arm-dark.png) | ![URDF tutorial robot imported into the builder](docs/img/builder-r2d2-light.png) |
+
+## Viewer features (0.1)
 
 - **xacro in the browser and the CLI**, written from the xacro docs and
   checked against the official implementation: properties (lazy, scoped,
@@ -92,7 +129,7 @@ npm ci                 # dev tools only
 npm run serve          # http://127.0.0.1:8000/
 ```
 
-CLI (Node 22 or newer):
+CLI (Node 22 or newer), viewer:
 
 ```console
 $ node bin/robot-studio.js check examples/studio_mecanum/urdf/studio_mecanum.urdf.xacro
@@ -118,6 +155,35 @@ Exit codes: 0 no errors (and no warnings with --strict), 1 warnings with --stric
             2 xacro failed or the model has errors, 3 usage or file error.
 ```
 
+Builder from the command line:
+
+```console
+$ node bin/robot-studio.js templates
+$ node bin/robot-studio.js new mecanum --set wheel_radius=0.05 --set camera=true -o bot.urdf
+$ node bin/robot-studio.js new mecanum -f toml
+$ node bin/robot-studio.js new arm --set dof=6 -f xacro -o arm.urdf.xacro
+$ node bin/robot-studio.js export my_robot.urdf.xacro -f package -o my_robot_description.zip
+```
+
+`new` and `export` take `--format urdf|xacro|toml|package` (package needs
+`-o file.zip`). `robot-studio new mecanum -f toml` prints:
+
+```toml
+# Generated by urdf-inspector from the URDF geometry. Check every value
+# against the real robot before using it for odometry.
+name = "mecanum_bot"
+description = "Measured from URDF 'mecanum_bot' (frame base_link)"
+
+wheel_radius = 0.04      # m, mean of the wheel cylinders
+half_length = 0.1       # m, lx: wheel centroid to wheel centre along x
+half_width = 0.125        # m, ly: wheel centroid to wheel centre along y
+roller_angle_deg = 45.0   # not in the URDF; 45 for ordinary mecanum wheels
+# ticks_per_rev and gear_ratio are not in the URDF; add them for encoder odometry.
+max_wheel_speed = 20   # rad/s, smallest wheel <limit velocity>
+wheel_order = ["FL", "FR", "RL", "RR"]
+...
+```
+
 `robot-studio xacro` prints the same text the official `xacro` prints (the
 CI test compares the CLI's TurtleBot3 output with the official one byte for
 byte), minus xacro's "autogenerated" banner.
@@ -135,13 +201,14 @@ flowchart LR
     X[xacro/<br/>dom, parser, evaluator,<br/>tables, processor]
     M[model.js<br/>findings with files, meshes]
     S[scene.js<br/>shapes, poses, sliders]
+    B[builder/<br/>document, edit ops, undo,<br/>templates, exports]
   end
   subgraph vendor["vendor/ (pinned, hash-checked)"]
     UI[urdf-inspector v0.1.1<br/>URDF reader, 72 checks,<br/>FK, inertia, wheels]
     T[three.js 0.187.0<br/>+ STL/OBJ/Collada loaders]
   end
   subgraph ui["src/ui (browser)"]
-    A[app.js panels]
+    A[app.js panels<br/>builder.js properties]
     R[view3d.js + meshes.js]
   end
   CLI[bin/robot-studio.js]
@@ -154,8 +221,11 @@ flowchart LR
   S --> R --> T
   A --> R
   V --> CLI --> M
+  B --> M
+  B --> UI
+  A --> B
   LS[lidar-slam-lab<br/>milestone 3] -.-> vendor
-  MK[mecanum-kinematics<br/>milestone 2] -.-> S
+  MK[mecanum-kinematics<br/>CI interop] -.-> B
   RB[rosbag-inspect<br/>milestone 4] -.-> ui
 ```
 
@@ -174,11 +244,11 @@ everything, see [docs/HANDOFF.md](docs/HANDOFF.md).
 
 Kept as three separate tiers in every release:
 
-| Tier               | Status in 0.1.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Software tests** | Yes. 92 Node tests (xacro features, expression evaluator including rejection of everything outside its grammar, zip reader, package resolution, vendor manifest, CLI, examples, UI state); coverage of `src/core` 99% lines / 96% branches with thresholds enforced. Golden job: the official `xacro` 2.1.1 regenerates 38 outputs in CI; Robot Studio matches 14 of the 16 successful expansions byte for byte and the other 2 (studio_mecanum, whose roller positions use `sin`/`cos`) except for a 1-ulp difference in 4 numbers each, fails on all 21 inputs the official tool rejects, and rejects 1 documented construct (`lambda`) that xacro accepts. Headless Chrome job loads every example, a zip upload and a phone-width view, and checks link counts, that WebGL drew something and that no console error occurred. |
-| **Simulation**     | Not applicable yet (milestone 3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| **Hardware**       | None. Nothing in this release has been run against a real robot or a bag recorded from one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Tier               | Status in 0.2.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Software tests** | Yes. 126 Node tests (xacro features, expression evaluator, zip reader and writer, package resolution, vendor manifest, CLI, examples, UI state, every builder edit operation with undo/redo, rename propagation, templates, inertia, import/export round trips on the bundled examples and the golden corpus, package zip, autosave); coverage of `src/core` 99.6% lines / 96.6% branches with thresholds enforced. Golden job: the official `xacro` 2.1.1 regenerates 45 outputs in CI; Robot Studio matches 21 of the 23 successful expansions byte for byte (including the three third-party descriptions and the 7 exported builder xacro files) and the other 2 except for a 1-ulp difference in 4 numbers each, fails on all 21 inputs the official tool rejects, and rejects 1 documented construct (`lambda`). The official xacro's expansion of each exported xacro equals the exported URDF. mecanum-kinematics v0.1.0 (installed from its public tag) loads the exported TOML files; wheel radius, lx and ly match the template parameters and its IK/FK agree with Robot Studio's to about 2e-15. Exported ROS 2 packages (three templates and the studio_mecanum example with meshes) build with colcon in `ros:humble-ros-base`, pass `check_urdf` and ROS's `xacro`, their launch file parses with `ros2 launch --show-args` and robot_state_publisher accepts each URDF (RViz and joint_state_publisher_gui are not in that image and were not run). Headless Chrome job loads every example, a zip upload and a phone-width view, creates a mecanum robot from the template through the UI, edits a parameter, undoes it with Ctrl+Z, exports, reloads and checks the autosave, and edits an imported model with meshes. |
+| **Simulation**     | Not applicable yet (milestone 3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| **Hardware**       | None. Nothing in this release has been run against a real robot or a bag recorded from one. No exported package has been run on a robot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ## How it compares
 
@@ -211,6 +281,9 @@ node scripts/golden-report.js    # golden comparison table
 python scripts/xacro_golden.py --check   # with xacro installed: goldens still match the official tool
 node scripts/vendor.mjs --verify # vendored files match upstream (network)
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --expect-links 11 --screenshot shot.png
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --builder   # builder scenario
+node scripts/builder-fixtures.js --check  # exported template files are current
+python scripts/mecanum_interop.py        # with mecanum-kinematics installed
 ```
 
 ## Known limitations
@@ -225,6 +298,15 @@ node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --expect-links 11 --
   selection.
 - The checks are urdf-inspector's; a clean report is not proof that the
   model is right.
+- Builder: numeric fields only (no transform gizmo); mimic and dynamics are
+  not editable in the panel; a xacro file is imported as its expansion
+  (macros and properties are not kept); the xacro export is parametrised
+  only while the robot is exactly a template's output; mecanum-kinematics
+  export only for four-wheel bases (no differential model there); template
+  dimensions and masses are illustrative defaults, not a real robot's.
+- Autosave lives in one browser's local storage; mesh files are not stored,
+  so an imported robot shows placeholders after a reload until its files
+  are opened again.
 
 ## License
 

@@ -121,3 +121,46 @@ xacro resolves `$(find)` with `ament_index_python`, which is not on PyPI;
 the generator replaces that one function with the package map of each test
 case. Everything else (parsing, evaluation, macro expansion, output) is the
 official code.
+
+## 10. The builder edits a plain-JSON document; undo keeps whole snapshots
+
+The builder's robot (`src/core/builder/document.js`) is plain JSON: links,
+joints, materials and the top-level elements it does not edit. Every edit
+is a typed operation that returns a new document; the editor keeps the
+previous documents for undo (200 steps). A 50-link document is a few tens
+of kilobytes, so whole snapshots are cheaper to get right than inverse
+operations, and the same value goes to local storage. Checks run on the
+document's URDF through `loadModel()`, the same path as an opened file, so
+the builder never has its own idea of what is valid.
+
+## 11. Templates have two writers that are tested against each other
+
+Each template generates the document (what is edited and checked) and a
+parametrised xacro file (what a ROS user keeps). Both are written in the
+same element order, and the inertias in the same operation order as
+urdf-inspector's formulas; the tests expand the xacro with Robot Studio's
+xacro, and the golden CI job with the official one, and require the result
+to equal the exported URDF. The parametrised xacro is offered only while
+the robot is exactly what its parameters generate; after manual edits the
+xacro export is the URDF in a xacro file, labelled as not parametrised,
+because a parameter set that no longer describes the robot would mislead.
+
+## 12. Sensors are tagged links, not a new element
+
+URDF has no sensor element and Gazebo's `<sensor>` tags are simulator
+specific. A sensor in the builder is a link with a `sensor` tag in Robot
+Studio's document (LiDAR, IMU, camera, depth camera; cameras get a REP 103
+optical frame). The tag is not written to URDF; on import it is guessed
+from link names (`laser`, `scan`, `imu`, `camera`, `depth`, ...).
+Milestone 3 simulates sensors at tagged links.
+
+## 13. Mecanum kinematics are cross-checked, not reused at run time
+
+mecanum-kinematics is Python and the page is static, so it cannot run in
+the browser. The TOML export reuses urdf-inspector's `mecanumToml`, and
+`src/core/builder/drive.js` implements mecanum inverse/forward kinematics
+with mecanum-kinematics' conventions from the wheel positions
+urdf-inspector measures. CI installs mecanum-kinematics from its public tag,
+loads the exported TOML with its own loader and compares both directions
+with Robot Studio's numbers, so a convention mismatch (wheel order, roller
+signs, lx/ly) fails the build.

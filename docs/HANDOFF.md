@@ -1,13 +1,20 @@
 # Handoff
 
-State of Robot Studio after milestone 1 (v0.1.0), for whoever builds
-milestone 2. Read [decisions.md](decisions.md) first.
+State of Robot Studio after milestone 2 (v0.2.0), for whoever builds
+milestone 3. Read [decisions.md](decisions.md) first, then
+[builder.md](builder.md).
 
 ## Status
 
 - Milestone 1 scope is implemented: xacro expansion, model loading
   (file / folder / zip / examples), three.js view, live checks, panels,
   URL state, themes, phone layout, CLI.
+- Milestone 2 scope is implemented: editable robot document with typed
+  operations and undo/redo, templates (mecanum, differential, arm) with
+  sensor mounts, properties panel, inertia from geometry, URDF / xacro /
+  mecanum-kinematics TOML / ROS 2 package exports, autosave, CLI `new`,
+  `export`, `templates`. Status of each acceptance criterion in
+  [ROADMAP.md](ROADMAP.md#milestone-2-builder-v020-done).
 - Validation: software tests only. Simulation: not applicable yet.
   Hardware: none.
 - urdf-inspector is vendored at **v0.1.1** (commit in
@@ -33,8 +40,20 @@ src/core/                      DOM-free, tested in Node, coverage-gated
   scene.js                     what the 3D view draws: shapes, colours, poses, sliders, bounds
   examples.js                  bundled example catalogue and exampleFs()
   canonical.js                 canonical XML comparison for the golden tests
+  zipwrite.js                  stored zip writer (package export)
+  builder/document.js          RobotDoc (plain JSON), tree helpers, unique names, sensor guess
+  builder/ops.js               typed edit operations (EditOp), validation, rename propagation
+  builder/editor.js            Editor: history, undo/redo, modelFromDoc() -> loadModel()
+  builder/inertia.js           inertial from a shape (urdf-inspector primitiveInertia + rotateTensor)
+  builder/urdf.js              RobotDoc <-> URDF (the writer uses the xacro serializer)
+  builder/templates.js         templates: params, document generator, xacro writer, validation
+  builder/actions.js           add child / add sensor / collision from visual as one step
+  builder/drive.js             mecanum TOML (urdf-inspector) and IK/FK from measured wheels
+  builder/export.js            xacro export, ROS 2 package files and zip
+  builder/storage.js           autosave format
 src/ui/                        browser only (not coverage-gated)
-  app.js                       DOM wiring, panels, selection, URL updates
+  app.js                       DOM wiring, panels, selection, URL updates, builder session
+  builder.js                   template form and properties panel (DOM only)
   view3d.js                    three.js scene, lights, helpers, picking
   meshes.js                    STL/OBJ/DAE loading from the VFS, textures via blob URLs
   files.js                     drop / file input / folder input -> VirtualFs
@@ -45,7 +64,10 @@ vendor/                        vendored code + manifest.json (never edit)
 examples/studio_mecanum/       our illustrative model (4 xacro files, STL + OBJ)
 examples/third_party/          TurtleBot3, urdf_tutorial, ros2_control_demos (unmodified, with licences)
 tests/                         node:test suites; tests/corpus = golden corpus
-scripts/                       vendor.mjs, xacro_golden.py, browser-smoke.mjs, serve.js, generators
+tests/corpus/builder/          exported template files (xacro, URDF, TOML, reference speeds)
+tests/builder-cases.js         which template cases are exported there
+scripts/                       vendor.mjs, xacro_golden.py, browser-smoke.mjs, serve.js, generators,
+                               builder-fixtures.js, mecanum_interop.py, ros2_package_check.sh
 ```
 
 ## How to run everything
@@ -68,6 +90,15 @@ node scripts/vendor.mjs --verify   # what CI runs (needs network)
 
 # browser smoke test / screenshots (Chrome or Edge)
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --expect-links 11 --screenshot shot.png
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --builder   # template, edit, Ctrl+Z, export, reload
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template arm --select-link link_3 --screenshot arm.png
+
+# builder exports
+node scripts/builder-fixtures.js           # rewrite tests/corpus/builder after changing a template or writer
+node scripts/builder-fixtures.js --check   # what CI runs
+# then regenerate the goldens on Linux (roller positions use sin/cos, last bit differs on Windows)
+PYTHONPATH=../mecanum-kinematics/src python scripts/mecanum_interop.py   # CI installs mecanum-kinematics v0.1.0
+node bin/robot-studio.js new mecanum -f package -o pkg.zip   # CI builds such zips with colcon in ros:humble-ros-base
 ```
 
 On this development machine: work only on D:, set
@@ -87,6 +118,21 @@ taken.
   to `SOURCES` in `scripts/vendor-lib.js` with the files needed, run
   `node scripts/vendor.mjs`, import from `vendor/lidar-slam-lab/src/...`.
 
+## Milestone 3 starting points
+
+- The robot to simulate is a `RobotDoc`; sensors are links with `sensor`
+  set (`lidar2d`, `imu`, `camera`, `depth_camera`). Simulation
+  parameters (LiDAR range, IMU noise) belong in new optional fields of the
+  document, not in the URDF.
+- Wheel geometry: `editor.model.report.context.wheels` (urdf-inspector's
+  `measureWheels`), and `mecanumInverse` / `mecanumForward` in
+  `src/core/builder/drive.js` (cross-checked against mecanum-kinematics in
+  CI). A differential model with the same conventions is the next piece.
+- Joint positions drive the view through `view.setPose(q)`; a simulation
+  loop can update `state.q` and a base pose (the view has no world offset
+  for the root yet: add one in `view3d.js`).
+- lidar-slam-lab is vendored the same way as urdf-inspector (decision 2).
+
 ## Known issues
 
 - `xacro.load_yaml` is not implemented (no YAML reader); descriptions that
@@ -102,5 +148,13 @@ taken.
   mass marker) use the rough size.
 - Large models: every mesh is loaded at once; no level of detail.
 - The page has no automated accessibility check yet.
+- Builder: no transform gizmo (numeric fields only); mimic and dynamics
+  have no fields in the Properties panel (the operations support them);
+  importing a xacro file imports its expansion (macros and properties are
+  not kept); after a reload an imported robot's meshes are placeholders
+  until its files are opened again; the differential template has no
+  mecanum-kinematics export (that library models mecanum bases only);
+  re-rendering the template form after a parameter edit moves keyboard
+  focus out of it.
 - urdf-inspector requests are listed in
   [upstream-requests.md](upstream-requests.md).
