@@ -24,6 +24,9 @@
 //     [--ros URL]           connect the ROS 2 panel to a rosbridge server (the fake one in
 //                           CI), wait for scans, opt in to driving, hold W, release, blur;
 //                           with --ros-log FILE (the fake server's log) check the Twists
+//                           (--ros-keep-armed: leave driving armed, for a screenshot)
+//     [--allow-local-network] turn off Chromium's Local Network Access check (a public
+//                           https page connecting to a rosbridge server on localhost)
 //     [--replay FILE]       open a recording .zip in the ROS 2 panel, replay it, compare it
 //                           with the simulator
 //
@@ -63,6 +66,8 @@ const { values } = parseArgs({
     "sim-interact": { type: "boolean", default: false },
     ros: { type: "string" },
     "ros-log": { type: "string" },
+    "ros-keep-armed": { type: "boolean", default: false },
+    "allow-local-network": { type: "boolean", default: false },
     replay: { type: "string" },
     timeout: { type: "string", default: "60000" },
   },
@@ -100,6 +105,10 @@ const args = [
   "--disable-renderer-backgrounding",
   "--disable-backgrounding-occluded-windows",
   "--disable-background-timer-throttling",
+  // Chromium blocks a public https page from reaching localhost / private addresses
+  // (Local Network Access) unless the user allows it; for screenshots of the live site
+  // connected to a local fake rosbridge server, turn that check off.
+  ...(values["allow-local-network"] ? ["--disable-features=LocalNetworkAccessChecks"] : []),
   "--remote-debugging-port=0",
   `--user-data-dir=${profile}`,
   ...(process.platform === "linux" ? ["--no-sandbox"] : []),
@@ -206,13 +215,16 @@ try {
   let st = "";
   if (values.upload) {
     // Wait for the default example, then open the given file through the file input.
-    while (Date.now() < deadline && (await evaluate("document.body.dataset.state")) !== "ready")
+    while (Date.now() < deadline && (await evaluate("document.body?.dataset.state")) !== "ready")
       await sleep(250);
-    await evaluate("document.body.dataset.state = 'uploading'");
+    await evaluate("document.body && (document.body.dataset.state = 'uploading')");
     const { root } = await s("DOM.getDocument");
     const { nodeId } = await s("DOM.querySelector", { nodeId: root.nodeId, selector: "#file" });
     await s("DOM.setFileInputFiles", { nodeId, files: [resolve(values.upload)] });
-    while (Date.now() < deadline && (await evaluate("document.body.dataset.state")) === "uploading")
+    while (
+      Date.now() < deadline &&
+      (await evaluate("document.body?.dataset.state")) === "uploading"
+    )
       await sleep(100);
   }
   while (Date.now() < deadline) {
@@ -417,7 +429,7 @@ async function runRos(s, evaluate, out, problems, deadline) {
   out.afterBlur = (await ds()).rosDrive;
   if (out.afterBlur !== "armed") problems.push(`ROS: not stopped after blur (${out.afterBlur})`);
   await s("Input.dispatchKeyEvent", { type: "keyUp", ...key });
-  await clickSelector(s, evaluate, "#ros-disarm");
+  if (!values["ros-keep-armed"]) await clickSelector(s, evaluate, "#ros-disarm");
   await sleep(300);
   out.afterStop = (await ds()).rosDrive;
   if (values["ros-log"]) {
