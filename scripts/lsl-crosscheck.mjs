@@ -16,6 +16,7 @@
 //    centre at 10 Hz instead of 0.1 s steps.
 //
 //   node scripts/lsl-crosscheck.mjs [--seeds 5] [--maps office,warehouse,loop] [--lsl ../lidar-slam-lab]
+//                                   [--full-seeds N] [--no-full]
 //
 // Exit code 1 when the reference numbers differ from lidar-slam-lab's.
 
@@ -37,9 +38,11 @@ const { values } = parseArgs({
     maps: { type: "string", default: "office,warehouse,loop" },
     lsl: { type: "string" },
     "no-full": { type: "boolean", default: false },
+    "full-seeds": { type: "string" },
   },
 });
 const seeds = Number(values.seeds);
+const fullSeeds = Number(values["full-seeds"] ?? values.seeds);
 const maps = /** @type {("office" | "warehouse" | "loop")[]} */ (values.maps.split(","));
 const f3 = (/** @type {number} */ v) => (Number.isNaN(v) ? "-" : v.toFixed(3));
 
@@ -104,7 +107,7 @@ if (!values["no-full"]) {
   const r = simRobot(modelFromDoc(doc), doc);
   if (!r.ok) throw new Error(r.reason);
   for (const id of maps) {
-    for (let seed = 1; seed <= seeds; seed++) {
+    for (let seed = 1; seed <= fullSeeds; seed++) {
       const world = /** @type {import("../src/core/sim/world.js").SimWorld} */ (bundledWorld(id));
       const sim = createSim(r.robot, world, normalizeSettings({ seed }));
       const route = createRoute("demo", r.robot, world);

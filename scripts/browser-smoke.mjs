@@ -12,6 +12,13 @@
 //     [--edit-model]        click "Edit the open model" (import as an editable robot)
 //     [--template id]       create a robot from that template through the UI
 //     [--select-link name]  click a link in the tree before the screenshot
+//     [--gpu]               render with the machine's GPU instead of SwiftShader
+//     [--headed]            open a visible window (with --gpu: a normal browser frame rate)
+//     [--sim]               open the simulation through the UI, drive the selected route
+//                           (--sim-route, default demo; --sim-world, default office) for
+//                           --sim-seconds of simulated time (default 12) at --sim-speed
+//                           (default 2), then check the robot moved, the error measures
+//                           filled in and the plots drew; reports fps and step time
 //
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
@@ -38,6 +45,14 @@ const { values } = parseArgs({
     "select-link": { type: "string" },
     template: { type: "string" },
     "edit-model": { type: "boolean", default: false },
+    sim: { type: "boolean", default: false },
+    gpu: { type: "boolean", default: false },
+    headed: { type: "boolean", default: false },
+    "sim-route": { type: "string", default: "demo" },
+    "sim-world": { type: "string", default: "office" },
+    "sim-seconds": { type: "string", default: "12" },
+    "sim-speed": { type: "string", default: "2" },
+    "sim-layers": { type: "string", default: "" },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -60,14 +75,20 @@ if (!browser) {
 const ownProfile = !values["user-data-dir"];
 const profile = values["user-data-dir"] ?? mkdtempSync(join(process.env.TMP ?? tmpdir(), "smoke-"));
 const args = [
-  "--headless=new",
-  "--use-angle=swiftshader",
-  "--enable-unsafe-swiftshader",
+  ...(values.headed ? [] : ["--headless=new"]),
+  ...(values.gpu
+    ? ["--enable-gpu", "--use-angle=default"]
+    : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]),
   "--ignore-gpu-blocklist",
   "--no-first-run",
   "--no-default-browser-check",
   "--disable-extensions",
   "--hide-scrollbars",
+  // Without these, a headless window can be treated as hidden and get only a
+  // few animation frames per second.
+  "--disable-renderer-backgrounding",
+  "--disable-backgrounding-occluded-windows",
+  "--disable-background-timer-throttling",
   "--remote-debugging-port=0",
   `--user-data-dir=${profile}`,
   ...(process.platform === "linux" ? ["--no-sandbox"] : []),
@@ -142,6 +163,9 @@ try {
   /** @param {string} m @param {object} [p] */
   const s = (m, p) => send(m, p, sessionId);
   await s("Page.enable");
+  // The new tab must be in front: a hidden tab gets no animation frames.
+  await s("Page.bringToFront");
+  await s("Emulation.setFocusEmulationEnabled", { enabled: true });
   await s("Runtime.enable");
   await s("Log.enable");
   const width = Number(values.width);
@@ -205,17 +229,28 @@ try {
     await sleep(500);
   }
   if (values.template && st === "ready") {
-    const before = await evaluate("Number(document.body.dataset.version || 0)");
+    // A new editing session starts at version 0, so also accept the switch to editing.
+    const was = await evaluate(
+      "[Number(document.body.dataset.version || 0), document.body.classList.contains('editing')]",
+    );
     await evaluate(
       `(() => { const t = document.getElementById('template'); t.value = ${JSON.stringify(values.template)}; t.dispatchEvent(new Event('change')); })()`,
     );
     await clickSelector(s, evaluate, "#btn-create");
     while (Date.now() < deadline) {
-      const v = await evaluate("Number(document.body.dataset.version || 0)");
-      if (v !== before && (await evaluate("document.body.dataset.state")) === "ready") break;
+      const [v, editing] = await evaluate(
+        "[Number(document.body.dataset.version || 0), document.body.classList.contains('editing')]",
+      );
+      const changed = v !== was[0] || (editing && !was[1]);
+      if (changed && (await evaluate("document.body.dataset.state")) === "ready") break;
       await sleep(100);
     }
   }
+  /** @type {Record<string, unknown>} */
+  const sim = {};
+  /** @type {string[]} */
+  const simProblems = [];
+  if (values.sim && st === "ready") await runSim(s, evaluate, sim, simProblems, deadline);
   if (values["select-link"]) {
     await clickSelector(s, evaluate, `#tree .t-link[data-link="${values["select-link"]}"]`);
     await sleep(300);
@@ -247,6 +282,7 @@ try {
   })()`);
   report.consoleErrors = errors;
   if (values.builder) report.builder = builder;
+  if (values.sim) report.sim = sim;
   if (values.screenshot) {
     const shot = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     writeFileSync(values.screenshot, Buffer.from(shot.data, "base64"));
@@ -264,7 +300,7 @@ try {
   if (report.webglColours < 12)
     problems.push(`the 3D view looks blank (${report.webglColours} colours)`);
   if (errors.length > 0) problems.push(`${errors.length} console error(s)`);
-  problems.push(...builderProblems);
+  problems.push(...builderProblems, ...simProblems);
   for (const p of problems) console.error(`FAIL: ${p}`);
   exitCode = problems.length === 0 ? 0 : 1;
   ws.close();
@@ -332,6 +368,85 @@ async function pressKey(s, key, code, keyCode, modifiers) {
   await s("Input.dispatchKeyEvent", { type: "rawKeyDown", ...base });
   if (key === "Enter") await s("Input.dispatchKeyEvent", { type: "char", text: "\r", ...base });
   await s("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+}
+
+/**
+ * The simulation scenario: open it through the UI, pick world and route,
+ * drive, and read what the page reports.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {number} deadline
+ */
+async function runSim(s, evaluate, out, problems, deadline) {
+  const rafRate =
+    "new Promise((r) => { let n = 0; const t0 = performance.now(); (function f() { n++; if (performance.now() - t0 < 1000) requestAnimationFrame(f); else r(n - 1); })(); })";
+  out.idleFramesPerSecond = await evaluate(rafRate);
+  await clickSelector(s, evaluate, "#p-sim > summary");
+  await clickSelector(s, evaluate, "#sim-open");
+  const choose = (/** @type {string} */ id, /** @type {string} */ value) =>
+    evaluate(
+      `(() => { const e = document.getElementById(${JSON.stringify(id)}); e.value = ${JSON.stringify(value)}; e.dispatchEvent(new Event('change')); return e.value; })()`,
+    );
+  if (
+    (await choose("sim-world", /** @type {string} */ (values["sim-world"]))) !== values["sim-world"]
+  )
+    problems.push(`no world '${values["sim-world"]}'`);
+  await choose("sim-route", /** @type {string} */ (values["sim-route"]));
+  await choose("sim-speed", /** @type {string} */ (values["sim-speed"]));
+  for (const l of /** @type {string} */ (values["sim-layers"]).split(",").filter(Boolean)) {
+    const [name, on] = l.split("=");
+    await evaluate(
+      `(() => { const e = document.querySelector('[data-layer="${name}"]'); e.checked = ${on !== "0"}; e.dispatchEvent(new Event('change')); })()`,
+    );
+  }
+  const target = Number(values["sim-seconds"]);
+  const t0 = Date.now();
+  let t = 0;
+  while (Date.now() < deadline) {
+    t = Number((await evaluate("document.body.dataset.simT")) ?? 0);
+    if (t >= target) break;
+    await sleep(250);
+  }
+  const wall = (Date.now() - t0) / 1000;
+  out.rafPerSecond = await evaluate(rafRate);
+  out.renderer = await evaluate(`(() => {
+    const g = document.querySelector('#view canvas').getContext('webgl2');
+    const x = g && g.getExtension('WEBGL_debug_renderer_info');
+    return x ? g.getParameter(x.UNMASKED_RENDERER_WEBGL) : 'unknown';
+  })()`);
+  const d = await evaluate("({ ...document.body.dataset })");
+  out.state = d.sim;
+  out.simulatedSeconds = Number(d.simT);
+  out.wallSeconds = Number(wall.toFixed(1));
+  out.distance = Number(d.simDistance);
+  out.fps = Number(d.simFps);
+  out.stepMs = Number(d.simStepMs);
+  out.errors = d.simErrors ? JSON.parse(d.simErrors) : null;
+  out.hud = await evaluate("document.getElementById('sim-hud').innerText");
+  out.note = await evaluate("document.getElementById('sim-note').textContent");
+  out.plotPixels = await evaluate(`(() => {
+    const c = document.getElementById('plot-errors');
+    const g = c.getContext('2d');
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  })()`);
+  out.url = await evaluate("location.search");
+  if (d.sim !== "running") problems.push(`simulation state is '${d.sim}'`);
+  if (!(Number(out.simulatedSeconds) >= target))
+    problems.push(`only ${out.simulatedSeconds} s simulated`);
+  if (!(Number(out.distance) > 1)) problems.push(`the robot moved only ${out.distance} m`);
+  const e = /** @type {any} */ (out.errors);
+  if (
+    !e ||
+    !["odom", "est", "mcl", "odomRms", "estRms", "mclRms"].every((k) => Number.isFinite(e[k]))
+  )
+    problems.push("the error measures did not fill in");
+  if (!(Number(out.plotPixels) > 200)) problems.push("the error plot is empty");
+  if (!String(out.url).includes("sim=1")) problems.push("the URL does not record the simulation");
 }
 
 /**
