@@ -61,6 +61,14 @@ them. It is built in five milestones ([ROADMAP](docs/ROADMAP.md)):
 Open the **ROS 2** panel. Details, the topic tables and the security notes
 are in [docs/ros2.md](docs/ros2.md).
 
+![The live view from the live site in the dark theme, connected to the in-repo fake rosbridge server on the same machine, which replays message fixtures generated from a simulated run (no robot): topic rates, the LIVE badge, LiDAR returns from the /tf_static mount, and driving armed with its banner](docs/img/ros-live-dark.png)
+
+![A replay in the light theme: a simulated run exported as a ROS 2 bag and imported with robot-studio-bag, labelled "Replay: SIMULATED data", with the comparison against the simulator driven by the same commands](docs/img/ros-replay-light.png)
+
+The live-view screenshot shows the fake server's simulated fixtures, not a
+robot; it was taken from the live site with the browser's local-network
+check turned off (see [docs/ros2.md](docs/ros2.md#live-robot-over-rosbridge)).
+
 - **Live robot over rosbridge.** Enter the robot's rosbridge address and
   press Connect (a link can fill the address with `?ros=ws://...`, but
   nothing connects without the click). `/joint_states`, `/tf`, `/tf_static`,

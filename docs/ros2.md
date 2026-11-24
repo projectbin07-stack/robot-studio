@@ -28,6 +28,8 @@ robot has been read; the steps for the owner's MentorPi are in
 
 ## Live robot over rosbridge
 
+![Live view connected to the fake rosbridge server replaying simulated fixtures (not a robot)](img/ros-live-dark.png)
+
 The page has its own rosbridge v2 client (`src/core/ros/rosbridge.js`),
 written from the protocol specification (rosbridge_suite's
 `ROSBRIDGE_PROTOCOL.md`): JSON over a WebSocket, the operations `subscribe`,
@@ -202,6 +204,8 @@ LaserScan beam (and every numeric array) instead of only its length, `echo
 54).
 
 ## Replay and simulation vs robot
+
+![Replay of a simulated run imported from its bag, with the comparison against the simulator](img/ros-replay-light.png)
 
 **Replay** (`src/core/ros/replay.js`, `robot-studio replay`, the panel's
 "Replay a recording"): the recording's streams are merged in time order and
