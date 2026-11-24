@@ -8,12 +8,17 @@ import { VERSION } from "./core/version.js";
 import { loadModel } from "./core/model.js";
 import { XacroError, expandXacro, serializeXml } from "./core/xacro/index.js";
 import { NodeFs, abs } from "./node/nodefs.js";
+import { TEMPLATES, TemplateError, findTemplate, generate } from "./core/builder/templates.js";
+import { importUrdf, toUrdf } from "./core/builder/urdf.js";
+import { exportXacro, packageZip } from "./core/builder/export.js";
+import { mecanumConfig } from "./core/builder/drive.js";
+import { modelFromDoc } from "./core/builder/editor.js";
 
 /**
  * @typedef {object} CliIo
  * @property {(text: string) => void} out
  * @property {(text: string) => void} err
- * @property {(path: string, data: string) => void} writeFile
+ * @property {(path: string, data: string | Uint8Array) => void} writeFile
  * @property {(path: string) => boolean} exists
  */
 
@@ -24,6 +29,9 @@ const HELP = `robot-studio ${VERSION}: open any robot model (URDF or xacro)
 Usage:
   robot-studio xacro <in.xacro> [--arg name=value ...] [name:=value ...] [-o out.urdf]
   robot-studio check <robot.urdf|robot.xacro> [--arg name=value ...] [--json] [--strict]
+  robot-studio new <template> [--set name=value ...] [--format F] [-o out]
+  robot-studio export <robot.urdf|robot.xacro> [--arg name=value ...] [--format F] [-o out]
+  robot-studio templates
   robot-studio --help | --version
 
 xacro     expand a xacro file the way the official xacro does and print the
@@ -32,7 +40,16 @@ xacro     expand a xacro file the way the official xacro does and print the
 check     expand (if needed) and run urdf-inspector's checks plus the mesh
           references; findings are sorted by severity with file:line
 
-Options for both:
+new       generate a robot from a template (mecanum, diff, arm); parameters
+          with --set name=value (numbers, true/false, x,y,z for positions)
+export    open a model (expanding xacro) and export it as the builder does
+templates list the templates and their parameters with defaults
+
+  --format F           (new, export) urdf (default), xacro, toml (four-wheel
+                       mecanum bases: mecanum-kinematics config) or package
+                       (ROS 2 description package as a .zip; needs -o)
+
+Options for xacro, check and export:
   --package name=dir   folder of a ROS package for $(find name) and
                        package://name/ (repeatable). Packages next to the
                        input file's package are found automatically from
@@ -48,14 +65,15 @@ Nothing is uploaded anywhere and no network connection is made.
 class UsageError extends Error {}
 
 /**
+ * Run the CLI. Returns the exit code, or a promise of it for commands that
+ * read files asynchronously (package export).
  * @param {string[]} argv
  * @param {CliIo} io
- * @returns {number}
+ * @returns {number | Promise<number>}
  */
 export function main(argv, io) {
-  try {
-    return run(argv, io);
-  } catch (e) {
+  /** @param {unknown} e */
+  const fail = (e) => {
     if (
       e instanceof UsageError ||
       (e instanceof Error && "code" in e && String(e.code).startsWith("ERR_PARSE_ARGS"))
@@ -63,8 +81,73 @@ export function main(argv, io) {
       io.err(`robot-studio: ${e.message}\nRun 'robot-studio --help' for usage.\n`);
       return EXIT.usage;
     }
+    if (e instanceof TemplateError || e instanceof RangeError) {
+      io.err(`robot-studio: ${e.message}\n`);
+      return EXIT.usage;
+    }
     throw e;
+  };
+  try {
+    const r = run(argv, io);
+    return typeof r === "number" ? r : r.catch(fail);
+  } catch (e) {
+    return fail(e);
   }
+}
+
+/**
+ * A --set value: number, boolean, x,y,z vector or text.
+ * @param {string} v
+ * @returns {unknown}
+ */
+function parseValue(v) {
+  if (v === "true" || v === "false") return v === "true";
+  if (v.includes(",")) return v.split(",").map((x) => (x.trim() === "" ? NaN : Number(x)));
+  if (v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+  return v;
+}
+
+/**
+ * Write one export of a builder document.
+ * @param {import("./core/builder/document.js").RobotDoc} doc
+ * @param {string} format
+ * @param {string | undefined} output
+ * @param {CliIo} io
+ * @param {NodeFs | null} meshFs
+ * @returns {number | Promise<number>}
+ */
+function writeExport(doc, format, output, io, meshFs) {
+  /** @param {string | Uint8Array} data */
+  const emit = (data) => {
+    if (output) {
+      io.writeFile(output, data);
+      io.err(`wrote ${output}\n`);
+    } else io.out(String(data));
+    return EXIT.ok;
+  };
+  if (format === "urdf") return emit(toUrdf(doc));
+  if (format === "xacro") {
+    const x = exportXacro(doc);
+    if (!x.parametrised) io.err("note: not parametrised (the robot is not a template's output)\n");
+    return emit(x.text);
+  }
+  if (format === "toml") {
+    const t = mecanumConfig(modelFromDoc(doc, meshFs));
+    if (!t.ok) {
+      io.err(`robot-studio: no mecanum-kinematics config: ${t.reason}\n`);
+      return EXIT.errors;
+    }
+    return emit(t.toml);
+  }
+  if (format === "package") {
+    if (!output) throw new UsageError("--format package writes a .zip; give -o file.zip");
+    return packageZip(doc, { meshFs }).then((p) => {
+      for (const n of p.notes) io.err(`note: ${n}\n`);
+      io.err(`package ${p.name}\n`);
+      return emit(p.zip);
+    });
+  }
+  throw new UsageError(`unknown format '${format}' (urdf, xacro, toml or package)`);
 }
 
 /**
@@ -108,6 +191,8 @@ function run(argv, io) {
       arg: { type: "string", short: "a", multiple: true },
       package: { type: "string", short: "p", multiple: true },
       output: { type: "string", short: "o" },
+      set: { type: "string", short: "s", multiple: true },
+      format: { type: "string", short: "f", default: "urdf" },
     },
   });
   if (values.help) {
@@ -123,7 +208,30 @@ function run(argv, io) {
     io.out(HELP);
     return EXIT.usage;
   }
-  if (cmd !== "xacro" && cmd !== "check") throw new UsageError(`unknown command '${cmd}'`);
+  if (cmd === "templates") {
+    for (const t of TEMPLATES) {
+      io.out(`${t.id}: ${t.title}\n  ${t.description}\n`);
+      for (const p of t.params) {
+        const def = Array.isArray(p.def) ? p.def.join(",") : String(p.def);
+        io.out(
+          `  ${p.key.padEnd(20)} ${def.padEnd(16)} ${p.label}${p.unit ? ` (${p.unit})` : ""}\n`,
+        );
+      }
+    }
+    return EXIT.ok;
+  }
+  if (cmd === "new") {
+    if (file === undefined)
+      throw new UsageError(`new needs a template: ${TEMPLATES.map((t) => t.id).join(", ")}`);
+    if (extra.length > 0) throw new UsageError(`unexpected argument '${extra[0]}'`);
+    findTemplate(file);
+    /** @type {Record<string, unknown>} */
+    const params = {};
+    for (const [k, v] of Object.entries(pairs(values.set, "--set"))) params[k] = parseValue(v);
+    return writeExport(generate(file, params), String(values.format), values.output, io, null);
+  }
+  if (cmd !== "xacro" && cmd !== "check" && cmd !== "export")
+    throw new UsageError(`unknown command '${cmd}'`);
   if (file === undefined) throw new UsageError(`${cmd} needs an input file`);
   if (extra.length > 0) throw new UsageError(`unexpected argument '${extra[0]}'`);
   if (!io.exists(file)) {
@@ -138,6 +246,21 @@ function run(argv, io) {
   const cwd = abs(".");
   /** @param {string} f */
   const rel = (f) => (f.startsWith(`${cwd}/`) ? f.slice(cwd.length + 1) : f);
+
+  if (cmd === "export") {
+    const model = loadModel(fs, entry, {
+      args,
+      env: /** @type {Record<string, string>} */ (process.env),
+    });
+    if (model.error) {
+      io.err(`robot-studio: ${model.error.message}\n`);
+      return EXIT.errors;
+    }
+    const imp = importUrdf(model.urdf, { entry });
+    for (const n of imp.notes) io.err(`note: ${n}\n`);
+    if (!imp.doc) return EXIT.errors;
+    return writeExport(imp.doc, String(values.format), values.output, io, fs);
+  }
 
   if (cmd === "xacro") {
     try {

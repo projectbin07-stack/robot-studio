@@ -124,6 +124,16 @@ export class NodeFs {
   }
 
   /**
+   * Bytes of a file (meshes copied into an exported package).
+   * @param {string} path
+   * @returns {Promise<Uint8Array | null>}
+   */
+  async readBinary(path) {
+    const p = this.locate(path);
+    return p === null ? null : new Uint8Array(readFileSync(p));
+  }
+
+  /**
    * Resolve a mesh reference (package://, file:// or relative to the loaded file).
    * @param {string} uri
    * @param {string} baseFile
