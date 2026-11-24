@@ -68,19 +68,19 @@ jobs:
           diff -r run1 run2
           node $B sim diff --world lab --route square --seconds 20 --seed 2
           node $B sim examples/third_party/turtlebot3_description/urdf/turtlebot3_burger.urdf.xacro --world loop --seconds 20
-          sha256sum run1/* 2>/dev/null || certutil -hashfile run1/summary.json SHA256
+          sha256sum run1/*
 
-      - name: "Simulation: committed fixtures are current; the CLI run is deterministic (step time measured on this runner)"
+      - name: "ROS 2: committed bag and rosbridge fixtures are current; bag export, replay and compare from the CLI"
         shell: bash
         run: |
-          node scripts/sim-fixtures.js --check
+          node scripts/bag-fixtures.js --check
+          node scripts/rosbridge-fixtures.js --check
           B=bin/robot-studio.js
-          node $B sim mecanum --world office --route demo --seconds 60 --seed 1 --out run1
-          node $B sim mecanum --world office --route demo --seconds 60 --seed 1 --out run2 > /dev/null
-          diff -r run1 run2
-          node $B sim diff --world lab --route square --seconds 20 --seed 2
-          node $B sim examples/third_party/turtlebot3_description/urdf/turtlebot3_burger.urdf.xacro --world loop --seconds 20
-          sha256sum run1/*
+          node $B bag run1 -o bag1
+          node $B bag run2 -o bag2 --name bag1
+          cmp bag1/bag1_0.mcap bag2/bag1_0.mcap
+          node $B replay run1
+          node $B compare run1 mecanum --ideal
 
   xacro-golden:
     name: Goldens match the official xacro
@@ -173,37 +173,81 @@ jobs:
       - name: Reference runs through Robot Studio's estimator wrapper vs lidar-slam-lab's CLI benchmark (every printed number), then the full simulation on the same maps
         run: node scripts/lsl-crosscheck.mjs --lsl lsl --seeds 5 --full-seeds 1
 
-  firmware-interop:
-    name: Simulated drive matches encoder-odometry-firmware's Python model (public tag)
-    runs-on: ubuntu-latest
+  python-companion:
+    name: robot-studio-bag on ${{ matrix.os }} / Python ${{ matrix.python }} (rosbag-inspect v0.2.0)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.13"]
+    defaults:
+      run:
+        working-directory: python
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-      - name: Install odobridge (the firmware's host package and firmware model) from its release tag
-        run: python -m pip install "odobridge @ git+https://github.com/projectbin07-stack/encoder-odometry-firmware@v0.1.0#subdirectory=host"
-      - name: The committed telemetry is what the simulator writes today
-        run: node scripts/sim-fixtures.js --check
-      - name: Replay the command schedule through the firmware model and compare every WHEEL_STATE and ODOMETRY frame
-        run: python scripts/firmware_interop.py
+          python-version: ${{ matrix.python }}
+      - name: Install the companion with rosbag-inspect from its v0.2.0 tag
+        run: python -m pip install "./[dev]"
+      - name: Lint, format, type check
+        run: |
+          ruff check .
+          ruff format --check .
+          mypy
+      - name: Tests (Robot Studio's own MCAP export of a simulated run, and a robot-like SQLite3 bag)
+        run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=85
 
-  lsl-crosscheck:
-    name: Estimators reproduce lidar-slam-lab's own benchmark (public tag)
+  bag-roundtrip:
+    name: "Round trip: simulation -> MCAP -> rosbag-inspect v0.2.0 -> robot-studio-bag -> replay, value by value"
     runs-on: ubuntu-latest
-    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
-      - name: Clone lidar-slam-lab at the vendored tag
-        run: git -c advice.detachedHead=false clone --quiet --depth 1 --branch v0.1.0 https://github.com/projectbin07-stack/lidar-slam-lab.git lsl
-      - name: Reference runs through Robot Studio's estimator wrapper vs lidar-slam-lab's CLI benchmark (every printed number), then the full simulation on the same maps
-        run: node scripts/lsl-crosscheck.mjs --lsl lsl --seeds 5 --full-seeds 1
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install robot-studio-bag (pulls rosbag-inspect from its v0.2.0 tag)
+        run: python -m pip install ./python
+      - name: Simulate 60 s (mecanum, office) and 20 s (differential, lab); export both as bags
+        run: |
+          B=bin/robot-studio.js
+          node $B sim mecanum --world office --route demo --seconds 60 --seed 1 --out mec/run --bag mec/bag
+          node $B sim diff --world lab --route square --seconds 20 --seed 2 --out diff/run --bag diff/bag
+      - name: Read the bags back with rosbag-inspect (info, check, LaserScan arrays with export --arrays)
+        run: |
+          rosbag-inspect --version
+          rosbag-inspect info mec/bag
+          rosbag-inspect check mec/bag --expect /scan:10 --expect /imu:100 --expect /odom:20
+          rosbag-inspect export mec/bag /scan scan.csv --arrays
+          python scripts/check_scan_export.py scan.csv mec/run/scans.jsonl
+      - name: Import with robot-studio-bag and compare every stream and the replay with the original
+        run: |
+          robot-studio-bag mec/bag mec/imported
+          node scripts/bag-roundtrip.mjs --original mec/run --imported mec/imported
+          robot-studio-bag diff/bag diff/imported
+          node scripts/bag-roundtrip.mjs --original diff/run --imported diff/imported
+          node bin/robot-studio.js replay mec/imported
+      - name: "Simulation vs recording: the imported (simulated) bag's command schedule on the simulator"
+        run: |
+          node bin/robot-studio.js compare mec/imported mecanum
+          node bin/robot-studio.js compare mec/imported mecanum --ideal
+
+  ros2-bag:
+    name: Exported bag read by ROS 2 Humble (ros2 bag info, rosbag2_py + rclpy deserialization)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Simulate 30 s and export the bag
+        run: node bin/robot-studio.js sim mecanum --world office --route demo --seconds 30 --seed 1 --out out/run --bag out/bag
+      - name: ros:humble-ros-base with ros-humble-rosbag2-storage-mcap
+        run: docker run --rm -v "$PWD/out:/data:ro" -v "$PWD/scripts:/scripts:ro" ros:humble-ros-base bash /scripts/ros2_bag_check.sh
 
   ros2-package:
     name: Exported ROS 2 packages build with colcon (ros:humble-ros-base)
@@ -251,11 +295,6 @@ jobs:
           $S --url "http://127.0.0.1:8000/" --builder --select-link front_left_wheel --expect-links 10 --expect-summary "0 error(s), 0 warning(s)" --screenshot builder.png
           $S --url "http://127.0.0.1:8000/?s=r2d2" --edit-model --expect-links 16 --expect-summary "meshes 8/8 shown"
           $S --url "http://127.0.0.1:8000/" --template arm --expect-links 9 --expect-summary "0 error(s), 0 warning(s), 0 note(s)"
-      - name: "Simulation: mecanum template on a scripted route, the robot moves, error measures and plots fill in, no console errors (frame rate and step time in the output)"
-        run: |
-          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
-          $S --url "http://127.0.0.1:8000/?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 15 --expect-links 10 --screenshot sim-mecanum.png --timeout 180000
-          $S --url "http://127.0.0.1:8000/" --template diff --sim --sim-world lab --sim-route square --sim-seconds 8 --expect-links 9 --screenshot sim-diff.png --timeout 180000
       - name: "Simulation: mecanum template on a scripted route, the robot moves, error measures and plots fill in; teleop, world edit, a setting, recording download; no console errors (frame rate and step time in the output)"
         run: |
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
