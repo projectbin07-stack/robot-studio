@@ -1,0 +1,2 @@
+Use of invalid name(s):  __class__ 
+when evaluating expression '().__class__'

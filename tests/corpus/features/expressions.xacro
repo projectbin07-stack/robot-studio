@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!-- Expression evaluator: Python number semantics and formatting, strings,
+     containers, builtins and the math module, as xacro exposes them. -->
+<robot name="expressions" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="w" value="0.10"/>
+  <xacro:property name="n" value="5"/>
+  <xacro:property name="big" value="1e-3"/>
+  <xacro:property name="txt" value="'quoted'"/>
+  <xacro:property name="under" value="1_0"/>
+  <xacro:property name="flag" value="true"/>
+
+  <numbers
+    literal_float="${w}" literal_int="${n}" literal_exp="${big}" quoted="${txt}" underscore="${under}" flag="${flag}"
+    true_div="${6/3}" mul="${2*3}" floor_div="${7//2}" neg_floor_div="${-7//2}" mod="${-7%3}" fmod="${7.5%-2}"
+    pow_int="${2**10}" pow_neg="${2**-1}" pow_float="${2.0**3}" third="${1/3}" sum="${0.1+0.2}"
+    e16="${1e16}" e15="${1e15}" small="${1e-5}" small4="${0.0001}" fixed="${123456789.123}" negzero="${-0.0}"
+    precedence="${-2**2}" chain="${1 &lt; 2 &lt; 3}" chain_false="${1 &lt; 3 &lt; 2}" int_float_eq="${1 == 1.0}"
+    bool_arith="${True + 1}" hex="${0x1f}" exp_int="${3e2}" leading_dot="${.5}" trailing_dot="${5.}"/>
+
+  <strings
+    concat="${'a' + 'b'}" repeat="${'ab' * 3}" index="${'robot'[1]}" slice="${'robot'[1:3]}" neg_index="${'robot'[-1]}"
+    fmt="${'%.3f' % 1.23456}" fmt_s="${'%s_link' % 'base'}" format="${'%s_%d' % ('wheel', 2)}"
+    fmt_g="${'%g' % 0.0001}" upper="${'abc'.upper()}" split="${'a b  c'.split()}"
+    join="${'-'.join(['x', 'y'])}" replace="${'a_b'.replace('_', '-')}" contains="${'ob' in 'robot'}"
+    not_contains="${'z' not in 'robot'}" str_of_float="${str(1.5) + 'm'}" repr_quote="${[&quot;it's&quot;]}"
+    startswith="${'base_link'.startswith('base')}" literal="$${not_evaluated}" literal_paren="$$(arg x)"
+    escaped_lt="${'a&lt;b'}" mixed="r=${w} n=${n}"/>
+
+  <containers
+    list="${[1, 2.5, 'x']}" list_index="${[1, 2, 3][-1]}" list_slice="${[1, 2, 3, 4][::2]}" tuple="${(1, 2)}"
+    single_tuple="${(1,)}" dict="${dict(a=1, b='x')}" dict_index="${dict(a=1)['a']}" len="${len([1, 2, 3])}"
+    list_concat="${[1] + [2]}" list_eq="${[1, 2] == [1, 2]}" in_list="${2 in [1, 2]}" none="${None}"
+    empty_list="${[]}" nested="${[[1, 2], [3]]}" tuple_bare="${1, 2}" dict_get="${dict(a=1).get('b', 7)}"
+    sorted="${python.sorted([3, 1, 2])}" range="${python.range(3)}" sum="${python.sum([1, 2.5])}"
+    zip="${list(python.zip([1, 2], ['a', 'b']))}" map="${list(map(float, ['1', '2.5']))}"/>
+
+  <logic
+    and_value="${0 and 5}" or_value="${0 or 5}" and_both="${3 and 4}" not_value="${not 0}"
+    ternary="${'yes' if n &gt; 3 else 'no'}" ternary_nested="${1 if False else 2 if True else 3}"
+    is_none="${None is None}" is_not="${1 is not None}" ne="${1 != 2}" ge="${2 &gt;= 2}"
+    str_lt="${'a' &lt; 'b'}" truthy_list="${bool([])}" truthy_str="${bool('x')}"/>
+
+  <builtins
+    int_trunc="${int(2.7)}" int_neg="${int(-2.7)}" int_str="${int('42')}" float_str="${float('3')}"
+    float_int="${float(2)}" str_int="${str(7)}" round_half_even="${round(2.5)}" round_half_odd="${round(3.5)}"
+    round_neg="${round(-2.5)}" round_digits="${round(2.675, 2)}" round_tie="${round(0.125, 2)}"
+    round_int="${round(7, 2)}" max_mixed="${max(1, 2.5)}" min_list="${min([3, 1, 2])}" abs_ns="${python.abs(-2)}"
+    abs_float="${python.abs(-2.5)}" bool_str="${bool('False')}" list_str="${list('ab')}"
+    divmod="${python.divmod(7, -2)}" any="${python.any([0, 1])}" all="${python.all([1, 0])}"/>
+
+  <math
+    pi="${pi}" math_pi="${math.pi}" half_pi="${pi/2}" e="${e}" radians="${radians(90)}" degrees="${degrees(pi)}"
+    sqrt="${sqrt(2)}" math_sqrt="${math.sqrt(16)}" floor="${math.floor(2.5)}" ceil="${ceil(-2.5)}"
+    atan2="${atan2(1, 1)}" hypot="${hypot(3, 4)}" pow="${pow(2, 3)}" fabs="${fabs(-3)}" log="${log(e)}"
+    log10="${log10(1000)}" log_base="${log(8, 2)}" exp0="${exp(0)}" cos0="${cos(0)}" sin_pi="${sin(pi)}"
+    cos_half="${cos(pi/3)}" tan="${tan(pi/4)}" asin="${asin(1)}" trunc="${trunc(-2.7)}" copysign="${copysign(3, -0.0)}"
+    isclose="${isclose(0.1 + 0.2, 0.3)}" factorial="${factorial(5)}" gcd="${gcd(12, 18)}" inf="${inf}"
+    fmod2="${fmod(-7, 3)}" tau="${tau}"/>
+
+  <text_content>value ${w * 2} and ${n}</text_content>
+</robot>

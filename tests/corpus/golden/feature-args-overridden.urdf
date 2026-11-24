@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<!-- xacro:arg defaults and overrides, $(arg), $(eval), $(optenv). -->
+<robot name="args">
+  <name value="renamed"/>
+  <values compare="False" derived="w0.5" evaluated="1.0" optenv="fallback value" prefixed="left_base_link" raw="0.5" tokens="['a', 'b', 'c']" width="1.0" xacro_arg="0.5"/>
+  <camera/>
+</robot>

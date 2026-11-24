@@ -1,0 +1,2 @@
+invalid syntax (<expression>, line 1) 
+when evaluating expression '1 +'

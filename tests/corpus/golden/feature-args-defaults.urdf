@@ -1,0 +1,7 @@
+<?xml version="1.0" ?>
+<!-- xacro:arg defaults and overrides, $(arg), $(eval), $(optenv). -->
+<robot name="args">
+  <name value="args_demo"/>
+  <values compare="True" derived="w0.3" evaluated="0.6" optenv="fallback value" prefixed="base_link" raw="0.3" tokens="['a', 'b', 'c']" width="0.6" xacro_arg="0.3"/>
+  <no_camera/>
+</robot>

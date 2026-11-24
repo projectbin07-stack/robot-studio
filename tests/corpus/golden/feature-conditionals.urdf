@@ -1,0 +1,30 @@
+<?xml version="1.0" ?>
+<!-- xacro:if / xacro:unless with literal and computed conditions,
+     xacro:element, xacro:attribute, text and comments. -->
+<robot name="conditionals">
+  <if_true/>
+  <if_True/>
+  <if_one/>
+  <unless_false/>
+  <computed/>
+  <nonzero_int/>
+  <float_truthy/>
+  <nested>text inside 2</nested>
+  <dyn2 extra_2="3.0 m" kind="made">
+    <child/>
+  </dyn2>
+  <gazebo reference="base">
+    <material>
+      Gazebo/
+      Blue
+    </material>
+    <mu1>0.5</mu1>
+    <plugin>
+<![CDATA[raw <cdata> ${count}]]>    </plugin>
+  </gazebo>
+  <!-- this comment stays -->
+  <kept/>
+  <!-- count is 2 -->
+  <evaluated/>
+  <!-- count is ${count} -->
+</robot>

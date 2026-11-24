@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<!-- xacro:if / xacro:unless with literal and computed conditions,
+     xacro:element, xacro:attribute, text and comments. -->
+<robot name="conditionals" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="use_lidar" value="true"/>
+  <xacro:property name="count" value="2"/>
+
+  <xacro:if value="true"><if_true/></xacro:if>
+  <xacro:if value="True"><if_True/></xacro:if>
+  <xacro:if value="1"><if_one/></xacro:if>
+  <xacro:if value="0"><if_zero/></xacro:if>
+  <xacro:if value="false"><if_false/></xacro:if>
+  <xacro:unless value="false"><unless_false/></xacro:unless>
+  <xacro:unless value="${use_lidar}"><unless_lidar/></xacro:unless>
+  <xacro:if value="${use_lidar and count == 2}"><computed/></xacro:if>
+  <xacro:if value="${count}"><nonzero_int/></xacro:if>
+  <xacro:if value="${0.5}"><float_truthy/></xacro:if>
+  <xacro:if value="${[]}"><empty_list/></xacro:if>
+  <xacro:if value="${use_lidar}">
+    <xacro:if value="${count &gt; 1}">
+      <nested>text inside ${count}</nested>
+    </xacro:if>
+  </xacro:if>
+
+  <xacro:element xacro:name="${'dyn' + str(count)}" kind="made">
+    <xacro:attribute name="extra_${count}" value="${count * 1.5} m"/>
+    <child/>
+  </xacro:element>
+
+  <gazebo reference="base">
+    <material>Gazebo/<xacro:if value="${use_lidar}">Blue</xacro:if><xacro:unless value="${use_lidar}">Red</xacro:unless></material>
+    <mu1>${count / 4}</mu1>
+    <plugin><![CDATA[raw <cdata> ${count}]]></plugin>
+  </gazebo>
+
+  <!-- this comment stays -->
+  <kept/>
+  <!-- xacro:eval-comments -->
+  <!-- count is ${count} -->
+  <evaluated/>
+  <!-- xacro:eval-comments:off -->
+  <!-- count is ${count} -->
+</robot>

@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="common_radius" value="0.04"/>
+  <xacro:macro name="common_link" params="name">
+    <link name="${name}"><visual><geometry><sphere radius="${common_radius}"/></geometry></visual></link>
+  </xacro:macro>
+  <included_element from="common"/>
+</robot>

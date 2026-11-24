@@ -1,0 +1,11 @@
+<?xml version="1.0" ?>
+<!-- Properties: lazy evaluation, scopes, defaults, removal and blocks. -->
+<robot name="scopes">
+  <values greedy="1.25" temp="back" total="20" wheel_radius="0.05" with_default="1.5"/>
+  <origin rpy="0 0 0" xyz="10 0 0"/>
+  <inner local="2"/>
+  <seen_in_wrapper parent="4"/>
+  <after global="6"/>
+  <shadowed outer_part="10" value="inner"/>
+  <unshadowed value="outer"/>
+</robot>

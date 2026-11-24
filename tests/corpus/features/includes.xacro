@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!-- Includes: relative paths, $(find), namespaces and globs. -->
+<robot name="includes" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:include filename="inc/common.xacro"/>
+  <xacro:include filename="$(find demo_parts)/urdf/parts.xacro" ns="parts"/>
+  <xacro:include filename="inc/parts/*.xacro"/>
+  <xacro:include filename="inc/missing.xacro" optional="true"/>
+
+  <common radius="${common_radius}"/>
+  <xacro:common_link name="from_common"/>
+  <ns value="${parts.part_size}" fallback="${parts.common_radius}"/>
+  <xacro:parts.part name="namespaced"/>
+  <glob a="${glob_a}" b="${glob_b}"/>
+</robot>

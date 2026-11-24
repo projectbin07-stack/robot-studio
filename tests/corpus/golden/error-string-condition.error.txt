@@ -1,0 +1,1 @@
+Xacro conditional "${'text'}" evaluated to "text", which is not a boolean expression.

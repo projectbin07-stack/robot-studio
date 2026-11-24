@@ -1,0 +1,201 @@
+[
+  {
+    "id": "feature-expressions",
+    "entry": "tests/corpus/features/expressions.xacro"
+  },
+  {
+    "id": "feature-scopes",
+    "entry": "tests/corpus/features/scopes.xacro"
+  },
+  {
+    "id": "feature-macros",
+    "entry": "tests/corpus/features/macros.xacro"
+  },
+  {
+    "id": "feature-macros-mode-arg",
+    "entry": "tests/corpus/features/macros.xacro",
+    "args": {
+      "mode": "real"
+    }
+  },
+  {
+    "id": "feature-conditionals",
+    "entry": "tests/corpus/features/conditionals.xacro"
+  },
+  {
+    "id": "feature-includes",
+    "entry": "tests/corpus/features/includes.xacro",
+    "packages": {
+      "demo_parts": "tests/corpus/features/pkgs/demo_parts"
+    }
+  },
+  {
+    "id": "feature-args-defaults",
+    "entry": "tests/corpus/features/args.xacro"
+  },
+  {
+    "id": "feature-args-overridden",
+    "entry": "tests/corpus/features/args.xacro",
+    "args": {
+      "robot_name": "renamed",
+      "width": "0.5",
+      "use_camera": "true",
+      "prefix": "left_"
+    }
+  },
+  {
+    "id": "error-bad-condition",
+    "entry": "tests/corpus/features/errors/bad_condition.xacro"
+  },
+  {
+    "id": "error-bad-property-name",
+    "entry": "tests/corpus/features/errors/bad_property_name.xacro"
+  },
+  {
+    "id": "error-circular",
+    "entry": "tests/corpus/features/errors/circular.xacro"
+  },
+  {
+    "id": "error-division-by-zero",
+    "entry": "tests/corpus/features/errors/division_by_zero.xacro"
+  },
+  {
+    "id": "error-dunder",
+    "entry": "tests/corpus/features/errors/dunder.xacro"
+  },
+  {
+    "id": "error-forward-missing",
+    "entry": "tests/corpus/features/errors/forward_missing.xacro"
+  },
+  {
+    "id": "error-invalid-param",
+    "entry": "tests/corpus/features/errors/invalid_param.xacro"
+  },
+  {
+    "id": "error-macro-named-call",
+    "entry": "tests/corpus/features/errors/macro_named_call.xacro"
+  },
+  {
+    "id": "error-missing-block",
+    "entry": "tests/corpus/features/errors/missing_block.xacro"
+  },
+  {
+    "id": "error-missing-include",
+    "entry": "tests/corpus/features/errors/missing_include.xacro"
+  },
+  {
+    "id": "error-missing-param",
+    "entry": "tests/corpus/features/errors/missing_param.xacro"
+  },
+  {
+    "id": "error-syntax-error",
+    "entry": "tests/corpus/features/errors/syntax_error.xacro"
+  },
+  {
+    "id": "error-type-error",
+    "entry": "tests/corpus/features/errors/type_error.xacro"
+  },
+  {
+    "id": "error-undefined-arg",
+    "entry": "tests/corpus/features/errors/undefined_arg.xacro"
+  },
+  {
+    "id": "error-undefined-block",
+    "entry": "tests/corpus/features/errors/undefined_block.xacro"
+  },
+  {
+    "id": "error-undefined-property",
+    "entry": "tests/corpus/features/errors/undefined_property.xacro"
+  },
+  {
+    "id": "error-unknown-macro",
+    "entry": "tests/corpus/features/errors/unknown_macro.xacro"
+  },
+  {
+    "id": "error-unused-block",
+    "entry": "tests/corpus/features/errors/unused_block.xacro"
+  },
+  {
+    "id": "error-arg-before-declaration",
+    "entry": "tests/corpus/features/errors/arg_before_declaration.xacro"
+  },
+  {
+    "id": "error-float-string-condition",
+    "entry": "tests/corpus/features/errors/float_string_condition.xacro"
+  },
+  {
+    "id": "unsupported-lambda",
+    "entry": "tests/corpus/features/lambda_expression.xacro",
+    "unsupported": "lambda expressions are not supported"
+  },
+  {
+    "id": "error-string-condition",
+    "entry": "tests/corpus/features/errors/string_condition.xacro"
+  },
+  {
+    "id": "turtlebot3-burger",
+    "entry": "examples/third_party/turtlebot3_description/urdf/turtlebot3_burger.urdf.xacro",
+    "packages": {
+      "turtlebot3_description": "examples/third_party/turtlebot3_description"
+    }
+  },
+  {
+    "id": "turtlebot3-waffle",
+    "entry": "examples/third_party/turtlebot3_description/urdf/turtlebot3_waffle.urdf.xacro",
+    "packages": {
+      "turtlebot3_description": "examples/third_party/turtlebot3_description"
+    }
+  },
+  {
+    "id": "turtlebot3-waffle-pi",
+    "entry": "examples/third_party/turtlebot3_description/urdf/turtlebot3_waffle_pi.urdf.xacro",
+    "packages": {
+      "turtlebot3_description": "examples/third_party/turtlebot3_description"
+    }
+  },
+  {
+    "id": "urdf-tutorial-macroed",
+    "entry": "examples/third_party/urdf_tutorial/urdf/08-macroed.urdf.xacro",
+    "packages": {
+      "urdf_tutorial": "examples/third_party/urdf_tutorial"
+    }
+  },
+  {
+    "id": "ros2-control-rrbot",
+    "entry": "examples/third_party/ros2_control_demos/example_1/description/urdf/rrbot.urdf.xacro",
+    "packages": {
+      "ros2_control_demo_description": "examples/third_party/ros2_control_demos/ros2_control_demo_description",
+      "ros2_control_demo_example_1": "examples/third_party/ros2_control_demos/example_1/description"
+    }
+  },
+  {
+    "id": "ros2-control-rrbot-prefixed",
+    "entry": "examples/third_party/ros2_control_demos/example_1/description/urdf/rrbot.urdf.xacro",
+    "packages": {
+      "ros2_control_demo_description": "examples/third_party/ros2_control_demos/ros2_control_demo_description",
+      "ros2_control_demo_example_1": "examples/third_party/ros2_control_demos/example_1/description"
+    },
+    "args": {
+      "prefix": "arm_"
+    }
+  },
+  {
+    "id": "studio-mecanum",
+    "entry": "examples/studio_mecanum/urdf/studio_mecanum.urdf.xacro",
+    "packages": {
+      "studio_mecanum_description": "examples/studio_mecanum"
+    }
+  },
+  {
+    "id": "studio-mecanum-variant",
+    "entry": "examples/studio_mecanum/urdf/studio_mecanum.urdf.xacro",
+    "packages": {
+      "studio_mecanum_description": "examples/studio_mecanum"
+    },
+    "args": {
+      "use_lidar": "false",
+      "use_camera": "false",
+      "wheel_radius": "0.05"
+    }
+  }
+]

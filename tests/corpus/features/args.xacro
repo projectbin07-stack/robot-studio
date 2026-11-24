@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<!-- xacro:arg defaults and overrides, $(arg), $(eval), $(optenv). -->
+<robot name="args" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="robot_name" default="args_demo"/>
+  <xacro:arg name="width" default="0.3"/>
+  <xacro:arg name="use_camera" default="false"/>
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="derived" default="w$(arg width)"/>
+  <xacro:property name="width" value="$(arg width)"/>
+  <name value="$(arg robot_name)"/>
+  <values width="${width * 2}" raw="$(arg width)" derived="$(arg derived)" prefixed="$(arg prefix)base_link"
+          evaluated="$(eval width * 2)" compare="$(eval use_camera == False)" optenv="$(optenv ROBOT_STUDIO_UNSET fallback value)"
+          xacro_arg="${xacro.arg('width')}" tokens="${xacro.tokenize('a, b;c')}"/>
+  <xacro:if value="$(arg use_camera)"><camera/></xacro:if>
+  <xacro:unless value="$(arg use_camera)"><no_camera/></xacro:unless>
+</robot>

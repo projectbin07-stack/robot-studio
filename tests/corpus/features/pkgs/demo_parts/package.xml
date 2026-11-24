@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>demo_parts</name>
+  <version>0.0.0</version>
+  <description>Test fixture package for $(find) and package:// resolution.</description>
+  <maintainer email="noreply@example.com">fixture</maintainer>
+  <license>MIT</license>
+</package>

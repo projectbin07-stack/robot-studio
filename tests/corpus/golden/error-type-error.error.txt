@@ -1,0 +1,2 @@
+unsupported operand type(s) for +: 'int' and 'str' 
+when evaluating expression '1 + 'a''

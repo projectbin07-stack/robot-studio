@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<!-- Includes: relative paths, $(find), namespaces and globs. -->
+<robot name="includes">
+  <included_element from="common"/>
+  <common radius="0.04"/>
+  <link name="from_common">
+    <visual>
+      <geometry>
+        <sphere radius="0.04"/>
+      </geometry>
+    </visual>
+  </link>
+  <ns fallback="0.04" value="1.5"/>
+  <link name="namespaced">
+    <visual>
+      <geometry>
+        <mesh filename="package://demo_parts/meshes/part.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </visual>
+  </link>
+  <glob a="A" b="AB"/>
+</robot>

@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!-- Properties: lazy evaluation, scopes, defaults, removal and blocks. -->
+<robot name="scopes" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <!-- lazy: "total" refers to "part", defined after it -->
+  <xacro:property name="total" value="${part * 2}"/>
+  <xacro:property name="part" value="0.25"/>
+  <xacro:property name="name_prop" value="wheel"/>
+  <xacro:property name="${name_prop}_radius" value="0.05"/>
+  <xacro:property name="greedy" value="${part + 1}" lazy_eval="false"/>
+  <xacro:property name="part" value="10"/>
+  <xacro:property name="with_default" default="1.5"/>
+  <xacro:property name="with_default" default="2.5"/>
+  <xacro:property name="temp" value="gone"/>
+  <xacro:property name="temp" remove="true"/>
+  <xacro:property name="temp" default="back"/>
+
+  <xacro:property name="origin_block">
+    <origin xyz="${part} 0 0" rpy="0 0 0"/>
+  </xacro:property>
+
+  <values total="${total}" wheel_radius="${wheel_radius}" greedy="${greedy}" with_default="${with_default}" temp="${temp}"/>
+  <xacro:insert_block name="origin_block"/>
+
+  <xacro:macro name="set_outer" params="v">
+    <xacro:property name="local_only" value="${v}"/>
+    <xacro:property name="to_parent" value="${v * 2}" scope="parent"/>
+    <xacro:property name="to_global" value="${v * 3}" scope="global"/>
+    <inner local="${local_only}"/>
+  </xacro:macro>
+
+  <xacro:macro name="wrapper" params="v">
+    <xacro:set_outer v="${v}"/>
+    <seen_in_wrapper parent="${to_parent}"/>
+  </xacro:macro>
+
+  <xacro:wrapper v="2"/>
+  <after global="${to_global}"/>
+
+  <!-- macro parameters shadow outer properties; the body sees the caller's scope -->
+  <xacro:property name="shade" value="outer"/>
+  <xacro:macro name="shadow" params="shade">
+    <shadowed value="${shade}" outer_part="${part}"/>
+  </xacro:macro>
+  <xacro:shadow shade="inner"/>
+  <unshadowed value="${shade}"/>
+</robot>

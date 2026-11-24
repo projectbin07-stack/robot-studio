@@ -1,0 +1,2 @@
+division by zero 
+when evaluating expression '1/0'

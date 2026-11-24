@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="part_size" value="${0.5 * 3}"/>
+  <xacro:macro name="part" params="name">
+    <link name="${name}">
+      <visual><geometry><mesh filename="package://demo_parts/meshes/part.stl" scale="0.001 0.001 0.001"/></geometry></visual>
+    </link>
+  </xacro:macro>
+</robot>

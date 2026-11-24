@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+<!-- Macros: parameters, defaults, default inheritance, block parameters,
+     nesting, recursion and dynamic calls. -->
+<robot name="macros" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:property name="mass" value="2.0"/>
+  <xacro:property name="color" value="blue"/>
+
+  <xacro:macro name="box_link" params="name size:=0.1 mass:=^ color:=^|red finish:=^|matte *origin **extra">
+    <link name="${name}">
+      <visual>
+        <xacro:insert_block name="origin"/>
+        <geometry><box size="${size} ${size} ${size}"/></geometry>
+        <material name="${color}_${finish}"/>
+      </visual>
+      <inertial>
+        <mass value="${mass}"/>
+        <inertia ixx="${mass * size**2 / 6}" ixy="0" ixz="0" iyy="${mass * size**2 / 6}" iyz="0" izz="${mass * size**2 / 6}"/>
+      </inertial>
+      <xacro:insert_block name="extra"/>
+    </link>
+  </xacro:macro>
+
+  <xacro:box_link name="a">
+    <origin xyz="0 0 ${mass / 4}"/>
+    <extra>
+      <collision><geometry><sphere radius="0.05"/></geometry></collision>
+      <note>kept</note>
+    </extra>
+  </xacro:box_link>
+
+  <xacro:box_link name="b" size="0.2" color="green">
+    <origin xyz="1 0 0"/>
+    <empty/>
+  </xacro:box_link>
+
+  <!-- params with = instead of :=, quoted defaults with spaces, defaults that use expressions -->
+  <xacro:macro name="defaults" params="a=1 b:='x y' c:=${mass*2} d:=$(arg mode)">
+    <defaults a="${a}" b="${b}" c="${c}" d="${d}"/>
+  </xacro:macro>
+  <xacro:arg name="mode" default="sim"/>
+  <xacro:defaults/>
+  <xacro:defaults a="3" b="z"/>
+
+  <!-- nested and recursive macros -->
+  <xacro:macro name="chain" params="n">
+    <link name="seg_${n}"/>
+    <xacro:if value="${n &gt; 0}">
+      <joint name="j_${n}" type="fixed"><parent link="seg_${n}"/><child link="seg_${n - 1}"/></joint>
+      <xacro:chain n="${n - 1}"/>
+    </xacro:if>
+  </xacro:macro>
+  <xacro:chain n="3"/>
+
+  <xacro:macro name="outer" params="p">
+    <xacro:macro name="local_inner" params="q">
+      <inner p="${p}" q="${q}"/>
+    </xacro:macro>
+    <xacro:local_inner q="${p}_q"/>
+  </xacro:macro>
+  <xacro:outer p="P"/>
+
+  <!-- dynamic call -->
+  <xacro:property name="which" value="defaults"/>
+  <xacro:call macro="${which}" a="9"/>
+
+  <!-- redefinition: the latest definition wins -->
+  <xacro:macro name="redef"><first/></xacro:macro>
+  <xacro:macro name="redef"><second/></xacro:macro>
+  <xacro:redef/>
+
+  <!-- a macro parameter holding a typed value -->
+  <xacro:macro name="typed" params="v">
+    <typed v="${v}" doubled="${v * 2}"/>
+  </xacro:macro>
+  <xacro:typed v="${[1, 2]}"/>
+  <xacro:typed v="0.5"/>
+</robot>

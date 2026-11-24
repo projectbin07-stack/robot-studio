@@ -1,0 +1,60 @@
+<?xml version="1.0" ?>
+<!-- Macros: parameters, defaults, default inheritance, block parameters,
+     nesting, recursion and dynamic calls. -->
+<robot name="macros">
+  <link name="a">
+    <visual>
+      <origin xyz="0 0 0.5"/>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+      <material name="blue_matte"/>
+    </visual>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.003333333333333334" ixy="0" ixz="0" iyy="0.003333333333333334" iyz="0" izz="0.003333333333333334"/>
+    </inertial>
+    <collision>
+      <geometry>
+        <sphere radius="0.05"/>
+      </geometry>
+    </collision>
+    <note>kept</note>
+  </link>
+  <link name="b">
+    <visual>
+      <origin xyz="1 0 0"/>
+      <geometry>
+        <box size="0.2 0.2 0.2"/>
+      </geometry>
+      <material name="green_matte"/>
+    </visual>
+    <inertial>
+      <mass value="2.0"/>
+      <inertia ixx="0.013333333333333336" ixy="0" ixz="0" iyy="0.013333333333333336" iyz="0" izz="0.013333333333333336"/>
+    </inertial>
+  </link>
+  <defaults a="1" b="x y" c="4.0" d="sim"/>
+  <defaults a="3" b="z" c="4.0" d="sim"/>
+  <link name="seg_3"/>
+  <joint name="j_3" type="fixed">
+    <parent link="seg_3"/>
+    <child link="seg_2"/>
+  </joint>
+  <link name="seg_2"/>
+  <joint name="j_2" type="fixed">
+    <parent link="seg_2"/>
+    <child link="seg_1"/>
+  </joint>
+  <link name="seg_1"/>
+  <joint name="j_1" type="fixed">
+    <parent link="seg_1"/>
+    <child link="seg_0"/>
+  </joint>
+  <link name="seg_0"/>
+  <inner p="P" q="P_q"/>
+  <defaults a="9" b="x y" c="4.0" d="sim"/>
+  <second/>
+  <typed doubled="[1, 2, 1, 2]" v="[1, 2]"/>
+  <typed doubled="1.0" v="0.5"/>
+</robot>
