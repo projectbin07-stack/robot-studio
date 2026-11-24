@@ -1,0 +1,130 @@
+{
+  "note": "Robot Studio's numbers for scripts/mecanum_interop.py: template parameters, wheel positions measured from the URDF by urdf-inspector, and wheel speeds (rad/s, FL FR RL RR, positive drives forward) from Robot Studio's mecanum kinematics.",
+  "template": {
+    "wheel_radius": 0.0485,
+    "half_length": 0.155,
+    "half_width": 0.1675
+  },
+  "wheels": [
+    {
+      "label": "FL",
+      "joint": "front_left_wheel_joint",
+      "x": 0.155,
+      "y": 0.1675,
+      "sign": 1
+    },
+    {
+      "label": "FR",
+      "joint": "front_right_wheel_joint",
+      "x": 0.155,
+      "y": -0.1675,
+      "sign": 1
+    },
+    {
+      "label": "RL",
+      "joint": "rear_left_wheel_joint",
+      "x": -0.155,
+      "y": 0.1675,
+      "sign": 1
+    },
+    {
+      "label": "RR",
+      "joint": "rear_right_wheel_joint",
+      "x": -0.155,
+      "y": -0.1675,
+      "sign": 1
+    }
+  ],
+  "cases": [
+    {
+      "twist": {
+        "vx": 0.3,
+        "vy": 0,
+        "wz": 0
+      },
+      "speeds": [
+        6.185567010309278,
+        6.185567010309278,
+        6.185567010309278,
+        6.185567010309278
+      ],
+      "forward": {
+        "vx": 0.3,
+        "vy": 0,
+        "wz": 0
+      }
+    },
+    {
+      "twist": {
+        "vx": 0,
+        "vy": 0.25,
+        "wz": 0
+      },
+      "speeds": [
+        -5.154639175257731,
+        5.154639175257731,
+        5.154639175257731,
+        -5.154639175257731
+      ],
+      "forward": {
+        "vx": 0,
+        "vy": 0.25,
+        "wz": 0
+      }
+    },
+    {
+      "twist": {
+        "vx": 0,
+        "vy": 0,
+        "wz": 1.2
+      },
+      "speeds": [
+        -7.979381443298969,
+        7.979381443298969,
+        -7.979381443298969,
+        7.979381443298969
+      ],
+      "forward": {
+        "vx": 0,
+        "vy": 0,
+        "wz": 1.1999999999999997
+      }
+    },
+    {
+      "twist": {
+        "vx": 0.2,
+        "vy": -0.15,
+        "wz": 0.7
+      },
+      "speeds": [
+        2.5618556701030926,
+        5.6855670103092795,
+        -3.6237113402061842,
+        11.871134020618555
+      ],
+      "forward": {
+        "vx": 0.20000000000000004,
+        "vy": -0.14999999999999994,
+        "wz": 0.7
+      }
+    },
+    {
+      "twist": {
+        "vx": -0.12,
+        "vy": 0.31,
+        "wz": -0.45
+      },
+      "speeds": [
+        -5.873711340206184,
+        0.9252577319587617,
+        6.90979381443299,
+        -11.858247422680412
+      ],
+      "forward": {
+        "vx": -0.12,
+        "vy": 0.30999999999999994,
+        "wz": -0.45000000000000007
+      }
+    }
+  ]
+}

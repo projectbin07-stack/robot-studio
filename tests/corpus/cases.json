@@ -197,5 +197,41 @@
       "use_camera": "false",
       "wheel_radius": "0.05"
     }
+  },
+  {
+    "id": "builder-mecanum",
+    "entry": "tests/corpus/builder/mecanum.urdf.xacro"
+  },
+  {
+    "id": "builder-mecanum-no-sensors",
+    "entry": "tests/corpus/builder/mecanum.urdf.xacro",
+    "args": {
+      "use_lidar": "false",
+      "use_imu": "false",
+      "use_depth_camera": "false"
+    }
+  },
+  {
+    "id": "builder-mecanum-variant",
+    "entry": "tests/corpus/builder/mecanum-variant.urdf.xacro"
+  },
+  {
+    "id": "builder-diff",
+    "entry": "tests/corpus/builder/diff.urdf.xacro"
+  },
+  {
+    "id": "builder-diff-camera",
+    "entry": "tests/corpus/builder/diff.urdf.xacro",
+    "args": {
+      "use_camera": "true"
+    }
+  },
+  {
+    "id": "builder-arm-2dof",
+    "entry": "tests/corpus/builder/arm-2dof.urdf.xacro"
+  },
+  {
+    "id": "builder-arm-6dof",
+    "entry": "tests/corpus/builder/arm-6dof.urdf.xacro"
   }
 ]
