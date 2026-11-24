@@ -21,6 +21,11 @@
 //                           filled in and the plots drew; reports fps and step time
 //     [--sim-interact]      then strafe with the Q key, draw a box in the world editor,
 //                           change a setting and download the recording
+//     [--ros URL]           connect the ROS 2 panel to a rosbridge server (the fake one in
+//                           CI), wait for scans, opt in to driving, hold W, release, blur;
+//                           with --ros-log FILE (the fake server's log) check the Twists
+//     [--replay FILE]       open a recording .zip in the ROS 2 panel, replay it, compare it
+//                           with the simulator
 //
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
@@ -56,6 +61,9 @@ const { values } = parseArgs({
     "sim-speed": { type: "string", default: "2" },
     "sim-layers": { type: "string", default: "" },
     "sim-interact": { type: "boolean", default: false },
+    ros: { type: "string" },
+    "ros-log": { type: "string" },
+    replay: { type: "string" },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -254,6 +262,10 @@ try {
   /** @type {string[]} */
   const simProblems = [];
   if (values.sim && st === "ready") await runSim(s, evaluate, sim, simProblems, deadline);
+  /** @type {Record<string, unknown>} */
+  const ros = {};
+  if (values.ros && st === "ready") await runRos(s, evaluate, ros, simProblems, deadline);
+  if (values.replay && st === "ready") await runReplay(s, evaluate, ros, simProblems, deadline);
   if (values["select-link"]) {
     await clickSelector(s, evaluate, `#tree .t-link[data-link="${values["select-link"]}"]`);
     await sleep(300);
@@ -286,6 +298,7 @@ try {
   report.consoleErrors = errors;
   if (values.builder) report.builder = builder;
   if (values.sim) report.sim = sim;
+  if (values.ros || values.replay) report.ros = ros;
   if (values.screenshot) {
     // On a phone the 3D view is at the top of the page; scenarios may have scrolled away from it.
     if (values.mobile) await evaluate("window.scrollTo(0, 0)");
@@ -336,6 +349,151 @@ try {
     // the browser may still hold files on Windows; the folder is in TMP
   }
   process.exit(exitCode);
+}
+
+/**
+ * The live robot: connect, wait for data, drive with the keyboard through the
+ * dead-man switch, release, then lose focus.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {number} deadline
+ */
+async function runRos(s, evaluate, out, problems, deadline) {
+  const ds = () => evaluate("({ ...document.body.dataset })");
+  await evaluate("document.getElementById('p-ros').open = true");
+  await evaluate(
+    `(() => { const i = document.getElementById('ros-url'); i.value = ${JSON.stringify(values.ros)}; })()`,
+  );
+  out.beforeClick = (await ds()).ros ?? "not connected";
+  await clickSelector(s, evaluate, "#ros-connect");
+  while (Date.now() < deadline) {
+    const d = await ds();
+    if (d.ros === "open" && Number(d.rosScans ?? 0) >= 5) break;
+    await sleep(200);
+  }
+  let d = await ds();
+  out.connected = d.ros;
+  out.scans = Number(d.rosScans ?? 0);
+  if (d.ros !== "open") problems.push(`ROS: connection state '${d.ros}'`);
+  if (Number(out.scans) < 5) problems.push(`ROS: only ${out.scans} scans shown`);
+  out.badge = await evaluate("document.getElementById('hud-badge').textContent");
+  if (!String(out.badge).includes("LIVE")) problems.push(`ROS: HUD badge '${out.badge}'`);
+  out.topics = await evaluate("document.getElementById('ros-topics').innerText");
+  // Arming without the confirmation does nothing.
+  await clickSelector(s, evaluate, "#ros-arm");
+  d = await ds();
+  if (d.rosDrive !== "disarmed")
+    problems.push(`ROS: armed without the confirmation (${d.rosDrive})`);
+  await evaluate("document.getElementById('ros-drive-confirm').checked = true");
+  await clickSelector(s, evaluate, "#ros-arm");
+  await sleep(200);
+  d = await ds();
+  out.armed = d.rosDrive;
+  if (d.rosDrive !== "armed") problems.push(`ROS: not armed after the opt-in (${d.rosDrive})`);
+  out.banner = await evaluate("document.getElementById('drive-banner').innerText");
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  const key = { key: "w", code: "KeyW", windowsVirtualKeyCode: 87, nativeVirtualKeyCode: 87 };
+  await s("Input.dispatchKeyEvent", { type: "rawKeyDown", ...key });
+  for (let i = 0; i < 8; i++) {
+    await s("Input.dispatchKeyEvent", { type: "rawKeyDown", autoRepeat: true, ...key });
+    await sleep(100);
+  }
+  out.whileHeld = (await ds()).rosDrive;
+  out.bannerDriving = await evaluate("document.getElementById('drive-banner').innerText");
+  await s("Input.dispatchKeyEvent", { type: "keyUp", ...key });
+  await sleep(400);
+  d = await ds();
+  out.afterRelease = d.rosDrive;
+  out.sent = Number(d.rosSent);
+  if (out.whileHeld !== "driving") problems.push(`ROS: holding W did not drive (${out.whileHeld})`);
+  if (d.rosDrive !== "armed") problems.push(`ROS: still '${d.rosDrive}' after the release`);
+  // Hold again, then the window loses focus.
+  await s("Input.dispatchKeyEvent", { type: "rawKeyDown", ...key });
+  await sleep(300);
+  await evaluate("window.dispatchEvent(new Event('blur'))");
+  await sleep(300);
+  out.afterBlur = (await ds()).rosDrive;
+  if (out.afterBlur !== "armed") problems.push(`ROS: not stopped after blur (${out.afterBlur})`);
+  await s("Input.dispatchKeyEvent", { type: "keyUp", ...key });
+  await clickSelector(s, evaluate, "#ros-disarm");
+  await sleep(300);
+  out.afterStop = (await ds()).rosDrive;
+  if (values["ros-log"]) {
+    const log = readFileSync(values["ros-log"], "utf8")
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l));
+    const tw = log.filter((e) => e.op === "publish" && e.topic === "/cmd_vel");
+    const moves = tw.filter((e) => e.msg.linear.x > 0);
+    const zeros = tw.filter((e) => e.msg.linear.x === 0 && e.msg.angular.z === 0);
+    out.cmdVel = {
+      messages: tw.length,
+      moving: moves.length,
+      zero: zeros.length,
+      maxVx: Math.max(0, ...moves.map((e) => e.msg.linear.x)),
+    };
+    // Gaps from the last moving command to the next zero (release, then blur), in ms on the server.
+    /** @type {number[]} */
+    const stops = [];
+    for (let i = 1; i < tw.length; i++)
+      if (tw[i].msg.linear.x === 0 && tw[i - 1].msg.linear.x > 0)
+        stops.push(Number((tw[i].t - tw[i - 1].t).toFixed(1)));
+    out.stopGapsMs = stops;
+    if (!log.some((e) => e.op === "advertise" && e.topic === "/cmd_vel"))
+      problems.push("ROS: /cmd_vel never advertised");
+    if (moves.length < 3)
+      problems.push(`ROS: only ${moves.length} moving Twists reached the server`);
+    if (stops.length < 2)
+      problems.push(`ROS: ${stops.length} stop(s) after moving Twists, expected 2 (release, blur)`);
+    if (tw.length && tw[tw.length - 1].msg.linear.x !== 0)
+      problems.push("ROS: the last Twist was not zero");
+    const firstMove = log.findIndex((e) => e.op === "publish" && e.topic === "/cmd_vel");
+    const armedAt = log.findIndex((e) => e.op === "advertise" && e.topic === "/cmd_vel");
+    if (firstMove >= 0 && firstMove < armedAt) problems.push("ROS: a Twist before the opt-in");
+  }
+}
+
+/**
+ * A recording replayed in the ROS 2 panel and compared with the simulator.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {number} deadline
+ */
+async function runReplay(s, evaluate, out, problems, deadline) {
+  await evaluate("document.getElementById('p-ros').open = true");
+  const { root } = await s("DOM.getDocument");
+  const { nodeId } = await s("DOM.querySelector", {
+    nodeId: root.nodeId,
+    selector: "#ros-replay-file",
+  });
+  await s("DOM.setFileInputFiles", {
+    nodeId,
+    files: [resolve(/** @type {string} */ (values.replay))],
+  });
+  await evaluate("document.getElementById('ros-replay-speed').value = '4'");
+  while (
+    Date.now() < deadline &&
+    Number((await evaluate("document.body.dataset.replayT")) ?? 0) < 6
+  )
+    await sleep(200);
+  out.replayT = Number(await evaluate("document.body.dataset.replayT"));
+  out.replayScans = Number(await evaluate("document.body.dataset.replayScans"));
+  out.badge = await evaluate("document.getElementById('hud-badge').textContent");
+  out.hud = await evaluate("document.getElementById('sim-hud').innerText");
+  if (!(Number(out.replayT) >= 6)) problems.push(`replay: only ${out.replayT} s replayed`);
+  if (!String(out.badge).startsWith("Replay")) problems.push(`replay: HUD badge '${out.badge}'`);
+  await clickSelector(s, evaluate, "#ros-compare");
+  while (Date.now() < deadline && !(await evaluate("document.body.dataset.compareRows")))
+    await sleep(200);
+  out.compareRows = Number(await evaluate("document.body.dataset.compareRows"));
+  out.compareNote = await evaluate("document.getElementById('ros-replay-note').textContent");
+  out.compare = await evaluate("document.getElementById('ros-compare-out').innerText");
+  if (!(Number(out.compareRows) >= 6))
+    problems.push(`replay: comparison has ${out.compareRows} rows`);
 }
 
 /**

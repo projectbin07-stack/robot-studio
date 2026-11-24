@@ -300,6 +300,18 @@ jobs:
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
           $S --url "http://127.0.0.1:8000/?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 15 --sim-interact --expect-links 10 --screenshot sim-mecanum.png --timeout 180000
           $S --url "http://127.0.0.1:8000/" --template diff --sim --sim-world lab --sim-route square --sim-seconds 8 --expect-links 9 --screenshot sim-diff.png --timeout 180000
+      - name: "ROS 2 live view against the fake rosbridge server (simulated fixtures): connect by click, LIVE labels, opt-in, drive with W, release and blur stop it (the server's log is checked)"
+        run: |
+          node scripts/fake-rosbridge.mjs --port 9090 --fixture tests/fixtures/rosbridge/sim_mecanum.jsonl --description tests/fixtures/rosbridge/robot_description.urdf --log rosbridge-log.jsonl &
+          sleep 1
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
+          $S --url "http://127.0.0.1:8000/?ros=ws%3A%2F%2F127.0.0.1%3A9090" --template mecanum --ros ws://127.0.0.1:9090 --ros-log rosbridge-log.jsonl --expect-links 10 --screenshot ros-live.png --timeout 180000
+      - name: "ROS 2 replay of a recording zip (simulated run) and the comparison with the simulator"
+        run: |
+          node bin/robot-studio.js sim mecanum --world office --route demo --seconds 20 --seed 1 --out rec
+          (cd rec && python3 -m zipfile -c ../rec.zip .)
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
+          $S --url "http://127.0.0.1:8000/" --template mecanum --replay rec.zip --expect-links 10 --screenshot ros-replay.png --timeout 180000
       - uses: actions/upload-artifact@v7
         if: always()
         with:
