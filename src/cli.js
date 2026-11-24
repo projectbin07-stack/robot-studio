@@ -13,6 +13,7 @@ import { importUrdf, toUrdf } from "./core/builder/urdf.js";
 import { exportXacro, packageZip } from "./core/builder/export.js";
 import { mecanumConfig } from "./core/builder/drive.js";
 import { modelFromDoc } from "./core/builder/editor.js";
+import { simCommand } from "./simcli.js";
 
 /**
  * @typedef {object} CliIo
@@ -20,6 +21,9 @@ import { modelFromDoc } from "./core/builder/editor.js";
  * @property {(text: string) => void} err
  * @property {(path: string, data: string | Uint8Array) => void} writeFile
  * @property {(path: string) => boolean} exists
+ * @property {(path: string) => string} [readText] (sim)
+ * @property {(path: string) => void} [mkdir] (sim --out)
+ * @property {() => number} [now] milliseconds (sim, for the step time it prints)
  */
 
 export const EXIT = { ok: 0, warnings: 1, errors: 2, usage: 3 };
@@ -32,6 +36,8 @@ Usage:
   robot-studio new <template> [--set name=value ...] [--format F] [-o out]
   robot-studio export <robot.urdf|robot.xacro> [--arg name=value ...] [--format F] [-o out]
   robot-studio templates
+  robot-studio sim <robot.urdf|robot.xacro|template> [--world W] [--route R]
+                   [--seconds S] [--seed N] [--out DIR] [--imu-cal FILE] [--set k=v]
   robot-studio --help | --version
 
 xacro     expand a xacro file the way the official xacro does and print the
@@ -44,6 +50,9 @@ new       generate a robot from a template (mecanum, diff, arm); parameters
           with --set name=value (numbers, true/false, x,y,z for positions)
 export    open a model (expanding xacro) and export it as the builder does
 templates list the templates and their parameters with defaults
+sim       drive the robot in a simulated world (wheels, encoders, IMU, LiDAR,
+          wheel odometry, scan matching, MCL) and write the recording;
+          'robot-studio sim --help' for the options. Simulation output only.
 
   --format F           (new, export) urdf (default), xacro, toml (four-wheel
                        mecanum bases: mecanum-kinematics config) or package
@@ -87,6 +96,13 @@ export function main(argv, io) {
     }
     throw e;
   };
+  if (argv[0] === "sim")
+    return simCommand(argv.slice(1), {
+      ...io,
+      readText: io.readText ?? (() => ""),
+      mkdir: io.mkdir ?? (() => {}),
+      now: io.now ?? (() => 0),
+    });
   try {
     const r = run(argv, io);
     return typeof r === "number" ? r : r.catch(fail);
