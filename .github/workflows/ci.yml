@@ -111,7 +111,7 @@ jobs:
           $S --url "http://127.0.0.1:8000/?a=use_lidar:false,use_camera:false" --expect-links 7
           $S --url "http://127.0.0.1:8000/" --upload tests/fixtures/description.zip --expect-links 1 --expect-summary "meshes 1/1 shown"
           $S --url "http://127.0.0.1:8000/?theme=dark" --width 390 --height 844 --mobile --expect-links 11 --screenshot phone.png
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: browser-screenshots
