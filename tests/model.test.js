@@ -254,3 +254,26 @@ test("sourceOf maps element paths to the file that defined them", async () => {
   assert.equal(m.sourceOf("/robot/gazebo"), ex.entry);
   assert.equal(loadModel(memFs({}), "/x.urdf").sourceOf("/robot"), "/x.urdf");
 });
+
+test("the golden comparison tolerates last-bit float differences and reports them", async () => {
+  const { ulps, ULP_TOLERANCE } = await import("../src/core/canonical.js");
+  const a = `<robot name="r"><o xyz="-0.027712812921102028 0 1"/></robot>`;
+  const b = `<robot name="r"><o xyz="-0.02771281292110203 0 1"/></robot>`;
+  const c = compareXml(a, b);
+  assert.equal(c.equal, true);
+  assert.equal(c.exact, false);
+  assert.equal(c.maxUlps, 1);
+  assert.equal(compareXml(a, `<robot name="r"><o xyz="-0.0277128 0 1"/></robot>`).equal, false);
+  assert.equal(
+    compareXml(a, `<robot name="r"><o xyz="-0.027712812921102028 0 2"/></robot>`).equal,
+    false,
+  );
+  assert.equal(
+    compareXml(a, `<robot name="r"><o xyz="-0.027712812921102028 0 1 x"/></robot>`).equal,
+    false,
+  );
+  assert.equal(ulps(1, 1), 0);
+  assert.equal(ulps(1, -1), Infinity);
+  assert.equal(ulps(NaN, 1), Infinity);
+  assert.ok(ULP_TOLERANCE >= 1);
+});

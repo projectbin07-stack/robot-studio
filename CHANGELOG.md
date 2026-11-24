@@ -20,10 +20,11 @@ simulation or hardware results.
   layout. Errors with file:line and macro/include trace.
 - A safe evaluator for the Python expression subset used in `${}` with
   Python's int/float semantics and number formatting.
-- Golden corpus of 38 cases compared with the official xacro 2.1.1 in CI: 16
+- Golden corpus of 38 cases compared with the official xacro 2.1.1 in CI: 14
   expansions byte-identical (including TurtleBot3 Burger/Waffle/Waffle Pi,
-  the ROS URDF tutorial and ros2_control_demos RRBot), 21 errors matched, 1
-  documented gap (lambda).
+  the ROS URDF tutorial and ros2_control_demos RRBot), 2 equal except for
+  1-ulp differences from `sin`/`cos`, 21 errors matched, 1 documented gap
+  (lambda).
 - Loading of a URDF or xacro file, a whole description folder or a zip
   (stored/deflate reader with CRC-32), with `package://` and relative mesh
   resolution and an install-layout fallback.

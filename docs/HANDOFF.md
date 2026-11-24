@@ -59,7 +59,7 @@ node bin/robot-studio.js check examples/studio_mecanum/urdf/studio_mecanum.urdf.
 # goldens (needs Python; keep the venv out of git)
 python -m venv .venv && .venv/Scripts/python -m pip install -r scripts/requirements-golden.txt   # bin/ on Linux
 .venv/Scripts/python scripts/xacro_golden.py          # regenerate after adding a case
-.venv/Scripts/python scripts/xacro_golden.py --check  # what CI runs
+.venv/Scripts/python scripts/xacro_golden.py --check  # CI runs this on Linux; on Windows the 2 studio_mecanum goldens differ in 4 last digits (C library sin)
 node scripts/golden-report.js                          # table for docs/xacro.md
 
 # vendored code

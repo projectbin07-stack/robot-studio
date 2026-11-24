@@ -30,6 +30,7 @@ export const loadCases = () => JSON.parse(readFileSync(`${ROOT}/tests/corpus/cas
  * @property {"urdf" | "error"} actual
  * @property {boolean} pass
  * @property {boolean} byteIdentical
+ * @property {number} maxUlps largest float difference in units in the last place
  * @property {number} elements
  * @property {string} detail
  */
@@ -67,6 +68,7 @@ export function runCase(c) {
     actual,
     pass: false,
     byteIdentical: false,
+    maxUlps: 0,
     elements: 0,
     detail: "",
   };
@@ -91,6 +93,7 @@ export function runCase(c) {
   const cmp = compareXml(golden, out);
   res.pass = cmp.equal;
   res.byteIdentical = cmp.byteIdentical;
+  res.maxUlps = cmp.maxUlps;
   res.elements = cmp.lines;
   res.detail = cmp.firstDifference
     ? `element ${cmp.firstDifference.line}:\n  official: ${cmp.firstDifference.expected}\n  ours:     ${cmp.firstDifference.actual}`

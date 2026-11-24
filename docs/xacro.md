@@ -21,16 +21,24 @@ output with the goldens (`tests/xacro-golden.test.js`).
 
 Result at v0.1.0 (`node scripts/golden-report.js`):
 
-| Inputs                                                                                                                                                                                                                                              | Outcome                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| 16 that the official xacro expands: 8 feature fixtures, TurtleBot3 Burger / Waffle / Waffle Pi, the ROS URDF tutorial's `08-macroed.urdf.xacro`, ros2_control_demos RRBot (two argument sets), the bundled studio_mecanum model (two argument sets) | All 16 identical to the official output **byte for byte** (comments and layout included) |
-| 21 that the official xacro rejects (undefined names, bad conditions, missing or unused blocks, circular properties, syntax errors, ...)                                                                                                             | Robot Studio rejects all 21                                                              |
-| 1 that the official xacro accepts and Robot Studio rejects on purpose (`lambda`)                                                                                                                                                                    | Rejected with "lambda expressions are not supported"                                     |
+| Inputs                                                                                                                                                                                                                                              | Outcome                                                                                                                                                                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 16 that the official xacro expands: 8 feature fixtures, TurtleBot3 Burger / Waffle / Waffle Pi, the ROS URDF tutorial's `08-macroed.urdf.xacro`, ros2_control_demos RRBot (two argument sets), the bundled studio_mecanum model (two argument sets) | 14 identical to the official output **byte for byte** (comments and layout included); 2 (studio_mecanum, two argument sets) identical except that 4 numbers each differ by 1 ulp in the last digit |
+| 21 that the official xacro rejects (undefined names, bad conditions, missing or unused blocks, circular properties, syntax errors, ...)                                                                                                             | Robot Studio rejects all 21                                                                                                                                                                        |
+| 1 that the official xacro accepts and Robot Studio rejects on purpose (`lambda`)                                                                                                                                                                    | Rejected with "lambda expressions are not supported"                                                                                                                                               |
 
 The comparison is also canonical (`src/core/canonical.js`: element order,
 names, attributes and text must match; comments and attribute order may
-differ), but at present every successful case is byte-identical, which the
-test also asserts.
+differ). Numbers may differ by up to 4 units in the last place, and the
+report says when they do: the roller positions of studio_mecanum use
+`sin`/`cos`, and Python on Linux (glibc) rounds `sin(4.18879...)` one bit
+differently from the JavaScript engine (V8 uses fdlibm), e.g.
+`-0.027712812921102028` vs `-0.02771281292110203`. Every other successful
+case is byte-identical, which the test also asserts.
+
+The goldens are generated on Linux, as in CI. Regenerating them on Windows
+gives the Windows C library's rounding for those 4 numbers, so
+`--check` reports the two studio_mecanum goldens as changed there.
 
 This is a corpus of 38 inputs, not a proof. Robot descriptions in the wild
 may use something the corpus does not cover; please open an issue with the

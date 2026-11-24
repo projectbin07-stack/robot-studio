@@ -14,7 +14,9 @@ for (const r of rows) {
       : r.pass
         ? r.byteIdentical
           ? `identical (${r.elements} elements, byte for byte)`
-          : `canonically equal (${r.elements} elements)`
+          : r.maxUlps > 0
+            ? `equal except float rounding: numbers differ by at most ${r.maxUlps} ulp (${r.elements} elements)`
+            : `canonically equal (${r.elements} elements)`
         : "MISMATCH";
   console.log(`| ${r.case.id} | ${r.expected} | ${r.actual} | ${result} |`);
 }
