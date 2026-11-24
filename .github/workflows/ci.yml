@@ -72,7 +72,9 @@ jobs:
       - name: Install the official xacro from PyPI
         run: python -m pip install -r scripts/requirements-golden.txt
       - name: Regenerate every golden output and fail if any differs from the committed one
-        run: python scripts/xacro_golden.py --check
+        run: |
+          python scripts/xacro_golden.py
+          git diff --exit-code -- tests/corpus/golden
       - name: Compare Robot Studio's expansion with the goldens
         run: |
           node --test tests/xacro-golden.test.js
