@@ -1,6 +1,6 @@
 {
   "name": "robot-studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Open any robot model in the browser: xacro expansion, URDF checks and a 3D view with meshes and joint sliders.",
   "license": "MIT",
