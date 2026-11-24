@@ -1,0 +1,167 @@
+{
+ "note": "Wheel speeds (rad/s, FL FR RL RR, positive drives forward) of Robot Studio's simulated drive for the mecanum template (tests/corpus/builder/mecanum.toml): ideal wheels after one step, and the motor + PI model (encoder-odometry-firmware's controller and plant model, no slip) after 3 s. Simulation output.",
+ "toml": "mecanum.toml",
+ "max_wheel_speed": 20,
+ "cases": [
+  {
+   "twist": {
+    "vx": 0.3,
+    "vy": 0,
+    "wz": 0
+   },
+   "scale": 1,
+   "ideal_speeds": [
+    7.5,
+    7.5,
+    7.5,
+    7.5
+   ],
+   "pi_speeds_after_3s": [
+    7.49949145466,
+    7.49949145466,
+    7.49949145466,
+    7.49949145466
+   ]
+  },
+  {
+   "twist": {
+    "vx": 0,
+    "vy": 0.3,
+    "wz": 0
+   },
+   "scale": 1,
+   "ideal_speeds": [
+    -7.5,
+    7.5,
+    7.5,
+    -7.5
+   ],
+   "pi_speeds_after_3s": [
+    -7.49949145466,
+    7.49949145466,
+    7.49949145466,
+    -7.49949145466
+   ]
+  },
+  {
+   "twist": {
+    "vx": 0,
+    "vy": 0,
+    "wz": 1
+   },
+   "scale": 1,
+   "ideal_speeds": [
+    -5.625,
+    5.625,
+    -5.625,
+    5.625
+   ],
+   "pi_speeds_after_3s": [
+    -5.62499873209,
+    5.62499873209,
+    -5.62499873209,
+    5.62499873209
+   ]
+  },
+  {
+   "twist": {
+    "vx": -0.2,
+    "vy": 0.1,
+    "wz": -0.5
+   },
+   "scale": 1,
+   "ideal_speeds": [
+    -4.6875,
+    -5.3125,
+    0.3125,
+    -10.3125
+   ],
+   "pi_speeds_after_3s": [
+    -4.68765865752,
+    -5.31275570085,
+    0.31205795349,
+    -10.3118911913
+   ]
+  },
+  {
+   "twist": {
+    "vx": 0.15,
+    "vy": -0.25,
+    "wz": 0.8
+   },
+   "scale": 1,
+   "ideal_speeds": [
+    5.5,
+    2,
+    -7,
+    14.5
+   ],
+   "pi_speeds_after_3s": [
+    5.50009173031,
+    2.00017582347,
+    -7.00051382517,
+    14.4996387839
+   ]
+  },
+  {
+   "twist": {
+    "vx": 1,
+    "vy": 0,
+    "wz": 0
+   },
+   "scale": 0.8,
+   "ideal_speeds": [
+    20,
+    20,
+    20,
+    20
+   ],
+   "pi_speeds_after_3s": [
+    20.000249235,
+    20.000249235,
+    20.000249235,
+    20.000249235
+   ]
+  },
+  {
+   "twist": {
+    "vx": 0.5,
+    "vy": 0.5,
+    "wz": 2
+   },
+   "scale": 0.551724137931,
+   "ideal_speeds": [
+    -6.20689655172,
+    20,
+    7.58620689655,
+    6.20689655172
+   ],
+   "pi_speeds_after_3s": [
+    -6.20640447348,
+    20.000249235,
+    7.58668734349,
+    6.20640447348
+   ]
+  },
+  {
+   "twist": {
+    "vx": -0.4,
+    "vy": 0.6,
+    "wz": -1.5
+   },
+   "scale": 0.598130841121,
+   "ideal_speeds": [
+    -9.90654205607,
+    -2.05607476636,
+    8.03738317757,
+    -20
+   ],
+   "pi_speeds_after_3s": [
+    -9.9063299072,
+    -2.05621885031,
+    8.0375294473,
+    -20.000249235
+   ]
+  }
+ ]
+}
