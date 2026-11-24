@@ -1,0 +1,16 @@
+name: Feature request
+description: A xacro feature, a mesh format, a view option or anything on the roadmap
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you want to do
+      description: The task, and the robot description or workflow it comes from.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Suggested behaviour
+      description: For xacro features, a link to the xacro documentation or source that defines it helps.

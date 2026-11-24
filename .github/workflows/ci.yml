@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dev tools
+        run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Type check (JSDoc, strict)
+        run: npm run typecheck
+
+      - name: Test with coverage thresholds (src/core)
+        run: npm run coverage
+
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          B=bin/robot-studio.js
+          node $B --version
+          node $B check examples/studio_mecanum/urdf/studio_mecanum.urdf.xacro --strict
+          node $B xacro examples/third_party/turtlebot3_description/urdf/turtlebot3_burger.urdf.xacro -o burger.urdf
+          cmp burger.urdf tests/corpus/golden/turtlebot3-burger.urdf
+          node $B xacro examples/third_party/ros2_control_demos/example_1/description/urdf/rrbot.urdf.xacro prefix:=arm_ | grep -q 'name="arm_joint1"'
+          # A model with warnings fails --strict with exit code 1.
+          set +e
+          node $B check examples/third_party/turtlebot3_description/urdf/turtlebot3_burger.urdf.xacro --strict > /dev/null
+          code=$?
+          set -e
+          test "$code" -eq 1
+
+  xacro-golden:
+    name: Goldens match the official xacro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install the official xacro from PyPI
+        run: python -m pip install -r scripts/requirements-golden.txt
+      - name: Regenerate every golden output and fail if any differs from the committed one
+        run: python scripts/xacro_golden.py --check
+      - name: Compare Robot Studio's expansion with the goldens
+        run: |
+          node --test tests/xacro-golden.test.js
+          node scripts/golden-report.js
+
+  vendor:
+    name: Vendored code matches its pinned upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Re-fetch urdf-inspector at its tag and three.js from npm, compare every byte
+        run: node scripts/vendor.mjs --verify
+
+  browser:
+    name: Browser smoke test (headless Chrome, WebGL via SwiftShader)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Load each example, a zip upload and a phone-width view; check links, WebGL output and console
+        run: |
+          PORT=8000 node scripts/serve.js &
+          sleep 1
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
+          $S --url "http://127.0.0.1:8000/" --expect-links 11 --expect-summary "0 error(s), 0 warning(s), 1 note(s)" --screenshot mecanum.png
+          $S --url "http://127.0.0.1:8000/?s=turtlebot3" --expect-links 7 --expect-summary "meshes 4/4 shown"
+          $S --url "http://127.0.0.1:8000/?s=r2d2" --expect-links 16 --expect-summary "meshes 8/8 shown"
+          $S --url "http://127.0.0.1:8000/?s=rrbot" --expect-links 5
+          $S --url "http://127.0.0.1:8000/?a=use_lidar:false,use_camera:false" --expect-links 7
+          $S --url "http://127.0.0.1:8000/" --upload tests/fixtures/description.zip --expect-links 1 --expect-summary "meshes 1/1 shown"
+          $S --url "http://127.0.0.1:8000/?theme=dark" --width 390 --height 844 --mobile --expect-links 11 --screenshot phone.png
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: browser-screenshots
+          path: "*.png"
+          if-no-files-found: ignore
