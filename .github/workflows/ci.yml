@@ -207,10 +207,10 @@ jobs:
           $S --url "http://127.0.0.1:8000/" --builder --select-link front_left_wheel --expect-links 10 --expect-summary "0 error(s), 0 warning(s)" --screenshot builder.png
           $S --url "http://127.0.0.1:8000/?s=r2d2" --edit-model --expect-links 16 --expect-summary "meshes 8/8 shown"
           $S --url "http://127.0.0.1:8000/" --template arm --expect-links 9 --expect-summary "0 error(s), 0 warning(s), 0 note(s)"
-      - name: "Simulation: mecanum template on a scripted route, the robot moves, error measures and plots fill in, no console errors (frame rate and step time in the output)"
+      - name: "Simulation: mecanum template on a scripted route, the robot moves, error measures and plots fill in; teleop, world edit, a setting, recording download; no console errors (frame rate and step time in the output)"
         run: |
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
-          $S --url "http://127.0.0.1:8000/?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 15 --expect-links 10 --screenshot sim-mecanum.png --timeout 180000
+          $S --url "http://127.0.0.1:8000/?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 15 --sim-interact --expect-links 10 --screenshot sim-mecanum.png --timeout 180000
           $S --url "http://127.0.0.1:8000/" --template diff --sim --sim-world lab --sim-route square --sim-seconds 8 --expect-links 9 --screenshot sim-diff.png --timeout 180000
       - uses: actions/upload-artifact@v7
         if: always()

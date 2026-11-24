@@ -19,6 +19,8 @@
 //                           --sim-seconds of simulated time (default 12) at --sim-speed
 //                           (default 2), then check the robot moved, the error measures
 //                           filled in and the plots drew; reports fps and step time
+//     [--sim-interact]      then strafe with the Q key, draw a box in the world editor,
+//                           change a setting and download the recording
 //
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
@@ -53,6 +55,7 @@ const { values } = parseArgs({
     "sim-seconds": { type: "string", default: "12" },
     "sim-speed": { type: "string", default: "2" },
     "sim-layers": { type: "string", default: "" },
+    "sim-interact": { type: "boolean", default: false },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -444,6 +447,85 @@ async function runSim(s, evaluate, out, problems, deadline) {
     problems.push("the error measures did not fill in");
   if (!(Number(out.plotPixels) > 200)) problems.push("the error plot is empty");
   if (!String(out.url).includes("sim=1")) problems.push("the URL does not record the simulation");
+  if (values["sim-interact"]) await interact(s, evaluate, out, problems);
+}
+
+/**
+ * Teleop, world editing, a setting and the recording, through the UI.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ */
+async function interact(s, evaluate, out, problems) {
+  // 1. Hold Q (strafe left on a mecanum base) for 1.5 s with the focus on the page.
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  const pose = () =>
+    evaluate("(() => { const t = document.getElementById('hud-time').textContent; return t; })()");
+  const before = Number(await evaluate("document.body.dataset.simDistance"));
+  const key = { key: "q", code: "KeyQ", windowsVirtualKeyCode: 81, nativeVirtualKeyCode: 81 };
+  await s("Input.dispatchKeyEvent", { type: "rawKeyDown", ...key });
+  await sleep(700);
+  out.teleopHud = await pose();
+  await sleep(800);
+  await s("Input.dispatchKeyEvent", { type: "keyUp", ...key });
+  const after = Number(await evaluate("document.body.dataset.simDistance"));
+  out.teleopDistance = Number((after - before).toFixed(3));
+  if (!String(out.teleopHud).includes("manual")) problems.push("holding Q did not take over");
+  if (!(after > before)) problems.push("the robot did not move while Q was held");
+
+  // 2. Draw a box in the world editor.
+  await clickSelector(s, evaluate, "#sim-world-editor > summary");
+  await clickSelector(s, evaluate, '[data-tool="box"]');
+  const r = await evaluate(`(() => {
+    const c = document.getElementById('world-canvas');
+    c.scrollIntoView({ block: 'center' });
+    const b = c.getBoundingClientRect();
+    return { x: b.left, y: b.top, w: b.width, h: b.height };
+  })()`);
+  const at = (/** @type {number} */ fx, /** @type {number} */ fy) => ({
+    x: r.x + r.w * fx,
+    y: r.y + r.h * fy,
+  });
+  const a = at(0.3, 0.3);
+  const b = at(0.42, 0.45);
+  await s("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    ...a,
+    button: "left",
+    clickCount: 1,
+  });
+  await s("Input.dispatchMouseEvent", { type: "mouseMoved", ...b, button: "left" });
+  await s("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    ...b,
+    button: "left",
+    clickCount: 1,
+  });
+  await sleep(500);
+  out.worldAfterEdit = await evaluate("document.getElementById('sim-world').value");
+  out.urlAfterEdit = await evaluate("location.search");
+  if (out.worldAfterEdit !== "custom") problems.push("drawing a box did not edit the world");
+  if (!/[?&]w=[^&]*~/.test(decodeURIComponent(String(out.urlAfterEdit))))
+    problems.push("the edited world is not in the URL");
+
+  // 3. Change a setting: 90 LiDAR beams.
+  await clickSelector(s, evaluate, "#sim-settings > summary");
+  await evaluate(`(() => {
+    const e = document.getElementById('sf-lidar.beams');
+    e.value = '90';
+    e.dispatchEvent(new Event('change'));
+  })()`);
+  await sleep(500);
+  out.noteAfterSetting = await evaluate("document.getElementById('sim-note').textContent");
+  if (!String(out.noteAfterSetting).includes("90 beams"))
+    problems.push("the LiDAR setting did not apply");
+
+  // 4. Download the recording.
+  await clickSelector(s, evaluate, "#sim-download");
+  await sleep(500);
+  out.download = await evaluate("document.body.dataset.lastExport");
+  if (!String(out.download).endsWith("-simulation.zip")) problems.push("no recording download");
 }
 
 /**
