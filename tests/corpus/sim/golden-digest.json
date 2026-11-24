@@ -2,7 +2,7 @@
  "note": "Digest of a fixed simulation run (scripts/sim-fixtures.js); the tests require it on every platform.",
  "files": {
   "trajectory.csv": "9c0d450e265f4a4f",
-  "scans.jsonl": "cf4c8f5935e07923",
+  "scans.jsonl": "f4c68e2802df759a",
   "imu.csv": "bbdf6f0e1b213882",
   "wheel_state.csv": "bde8c64f11e94c91",
   "odometry.csv": "5704344cdd72da91",
@@ -10,6 +10,6 @@
   "map.pgm": "0eebaff63d6c7248",
   "map.yaml": "3ddb6880b2959db5",
   "world.json": "2910c95f505c7139",
-  "summary.json": "9c929107e4850a53"
+  "summary.json": "80d28da06f8b1d0f"
  }
 }

@@ -97,7 +97,8 @@ export const DEFAULT_ESTIMATORS = Object.freeze({
  */
 
 /**
- * @param {{ width: number, height: number }} area map size (m)
+ * @param {{ width: number, height: number, x0?: number, y0?: number }} area map size (m) and
+ *   its lower-left corner (default 0, 0: the simulated world)
  * @param {readonly Segment[]} knownWalls the floor plan MCL localises on (walls the LiDAR sees)
  * @param {Pose2} start true start pose of the tracked frame (defines the map frame)
  * @param {Pose2} mount LiDAR scan origin in the tracked frame
@@ -110,8 +111,8 @@ export function createEstimators(area, knownWalls, start, mount, settings) {
     area.width + 2 * margin,
     area.height + 2 * margin,
     settings.resolution,
-    -margin,
-    -margin,
+    (area.x0 ?? 0) - margin,
+    (area.y0 ?? 0) - margin,
   );
   /** @type {Estimators} */
   const e = {

@@ -91,6 +91,8 @@ import { DIFFERENTIAL, FW_DEFAULTS, MECANUM } from "./firmware.js";
  * @property {{ x: number, y: number, radius: number }} footprint disc around the wheel centroid (drive frame) for collisions
  * @property {SimSensor[]} sensors
  * @property {Map<string, Transform>} zeroPoses link poses in the root frame at q = 0
+ * @property {{ parent: string, child: string, xyz: Vec3, rpy: Vec3 }[]} fixedJoints the
+ *   transforms robot_state_publisher sends on /tf_static, in tree order
  */
 
 /**
@@ -399,6 +401,12 @@ export function simRobot(model, doc) {
       footprint: { x: 0, y: 0, radius: reach },
       sensors,
       zeroPoses: poses,
+      fixedJoints: tree.order.flatMap((name) => {
+        const j = tree.parentJoint.get(name);
+        return j && j.type === "fixed"
+          ? [{ parent: j.parent, child: j.child, xyz: j.origin.xyz, rpy: j.origin.rpy }]
+          : [];
+      }),
     },
   };
 }

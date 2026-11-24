@@ -10,6 +10,7 @@ import { mapPrecision } from "../../../vendor/lidar-slam-lab/src/metrics.js";
 import { CONTROL_RATE, DT, SUBSTEPS, simErrors } from "./sim.js";
 import { settingsDiff } from "./settings.js";
 import { serializeSimWorld } from "./world.js";
+import { planarOf } from "./robot.js";
 
 /** @typedef {import("./sim.js").Sim} Sim */
 /** @typedef {import("./se2.js").Pose2} Pose2 */
@@ -36,6 +37,7 @@ const pose = (p) => (p ? [fx(p.x, 5), fx(p.y, 5), fx(p.theta, 6)] : ["nan", "nan
 export function runSummary(sim, meta) {
   const e = simErrors(sim);
   const r = (/** @type {number} */ v, d = 4) => (Number.isFinite(v) ? Number(v.toFixed(d)) : null);
+  const planar = (/** @type {Pose2} */ p) => ({ x: r(p.x, 6), y: r(p.y, 6), theta: r(p.theta, 9) });
   const est = sim.est;
   const map = est && sim.lidar ? mapPrecision(est.grid, sim.lidar.segments, 0.1) : null;
   return {
@@ -54,6 +56,18 @@ export function runSummary(sim, meta) {
       max_wheel_speed: r(sim.controller.config.maxWheelSpeed, 6),
       ticks_per_wheel_rev: sim.ticksPerRev,
       footprint_radius: r(sim.robot.footprint.radius, 4),
+      base_height: r(sim.robot.baseHeight, 6),
+      drive_pose: planar(sim.robot.drivePose),
+      root_in_base: {
+        ...planar(planarOf(sim.robot.rootInBase)),
+        z: r(sim.robot.rootInBase.p[2], 6),
+      },
+      static_transforms: sim.robot.fixedJoints.map((j) => ({
+        parent: j.parent,
+        child: j.child,
+        xyz: j.xyz.map((v) => r(v, 9)),
+        rpy: j.rpy.map((v) => r(v, 9)),
+      })),
     },
     world: { id: meta.worldId, name: sim.world.name },
     route: meta.route,
@@ -160,6 +174,13 @@ export function recordingFiles(sim, meta) {
       range_min: l.minRange,
       range_max: l.config.maxRange,
       scan_time: Number((1 / l.rateHz).toFixed(6)),
+      // The sensor frame in the base frame (x, y, yaw; z above the base frame origin).
+      mount: {
+        x: Number(l.sensor.planar.x.toFixed(6)),
+        y: Number(l.sensor.planar.y.toFixed(6)),
+        z: Number(l.sensor.mount.p[2].toFixed(6)),
+        yaw: Number(l.sensor.planar.theta.toFixed(9)),
+      },
     };
     files["scans.jsonl"] =
       JSON.stringify({ header: head, note: "ranges in metres, null = no return" }) +
