@@ -110,6 +110,8 @@ export function initSim(host) {
   let fpsT0 = 0;
   let fps = 0;
   let plotT = 0;
+  /** Main-thread time of one frame (simulation steps, scene update, draw calls), ms, averaged. */
+  let frameMs = 0;
   /** @type {number | null} */
   let raf = null;
   /** The panel has been opened (state.sim may be set by a link before that). */
@@ -581,6 +583,7 @@ export function initSim(host) {
       frames = 0;
       fpsT0 = now;
     }
+    const work0 = performance.now();
     session.manual = manual();
     const before = { ...session.sim.truth };
     if (running) session.advance(dt * speed);
@@ -600,6 +603,8 @@ export function initSim(host) {
     }
     view.holdRender = false;
     view.render();
+    const work = performance.now() - work0;
+    frameMs = frameMs === 0 ? work : 0.9 * frameMs + 0.1 * work;
     if (now - plotT > 100) {
       plotT = now;
       hud();
@@ -667,12 +672,13 @@ export function initSim(host) {
       table.append(tr);
     }
     $("hud-perf").textContent =
-      `${fps.toFixed(0)} fps · ${session.stepMs.toFixed(2)} ms per 10 ms step (measured in this browser)`;
+      `${fps.toFixed(0)} fps · frame ${frameMs.toFixed(1)} ms · ${session.stepMs.toFixed(2)} ms per 10 ms step (measured in this browser)`;
     const d = document.body.dataset;
     d.simT = s.t.toFixed(2);
     d.simDistance = s.distance.toFixed(3);
     d.simFps = fps.toFixed(1);
     d.simStepMs = session.stepMs.toFixed(3);
+    d.simFrameMs = frameMs.toFixed(2);
     d.simErrors = e
       ? JSON.stringify({
           odom: e.odom,

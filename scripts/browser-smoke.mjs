@@ -380,9 +380,6 @@ async function pressKey(s, key, code, keyCode, modifiers) {
  * @param {number} deadline
  */
 async function runSim(s, evaluate, out, problems, deadline) {
-  const rafRate =
-    "new Promise((r) => { let n = 0; const t0 = performance.now(); (function f() { n++; if (performance.now() - t0 < 1000) requestAnimationFrame(f); else r(n - 1); })(); })";
-  out.idleFramesPerSecond = await evaluate(rafRate);
   await clickSelector(s, evaluate, "#p-sim > summary");
   await clickSelector(s, evaluate, "#sim-open");
   const choose = (/** @type {string} */ id, /** @type {string} */ value) =>
@@ -410,7 +407,6 @@ async function runSim(s, evaluate, out, problems, deadline) {
     await sleep(250);
   }
   const wall = (Date.now() - t0) / 1000;
-  out.rafPerSecond = await evaluate(rafRate);
   out.renderer = await evaluate(`(() => {
     const g = document.querySelector('#view canvas').getContext('webgl2');
     const x = g && g.getExtension('WEBGL_debug_renderer_info');
@@ -423,6 +419,7 @@ async function runSim(s, evaluate, out, problems, deadline) {
   out.distance = Number(d.simDistance);
   out.fps = Number(d.simFps);
   out.stepMs = Number(d.simStepMs);
+  out.frameMs = Number(d.simFrameMs);
   out.errors = d.simErrors ? JSON.parse(d.simErrors) : null;
   out.hud = await evaluate("document.getElementById('sim-hud').innerText");
   out.note = await evaluate("document.getElementById('sim-note').textContent");
