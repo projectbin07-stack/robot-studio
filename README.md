@@ -63,6 +63,8 @@ are in [docs/ros2.md](docs/ros2.md).
 
 ![The live view from the live site in the dark theme, connected to the in-repo fake rosbridge server on the same machine, which replays message fixtures generated from a simulated run (no robot): topic rates, the LIVE badge, LiDAR returns from the /tf_static mount, and driving armed with its banner](docs/img/ros-live-dark.png)
 
+_Above: no robot is connected. The page is talking to the in-repo fake rosbridge server, which replays messages generated from a simulated run; the page labels any rosbridge connection "LIVE" because it cannot tell the difference._
+
 ![A replay in the light theme: a simulated run exported as a ROS 2 bag and imported with robot-studio-bag, labelled "Replay: SIMULATED data", with the comparison against the simulator driven by the same commands](docs/img/ros-replay-light.png)
 
 The live-view screenshot shows the fake server's simulated fixtures, not a
