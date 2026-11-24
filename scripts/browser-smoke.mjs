@@ -25,7 +25,7 @@
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -313,6 +313,22 @@ try {
   console.error(e);
 } finally {
   proc.kill();
+  if (process.platform === "win32") {
+    // Edge on Windows hands over to a new browser process, so killing the one
+    // we started leaves the browser, its renderers and its GPU process running
+    // (a software-rendering GPU process keeps a core busy). End every process
+    // started with this run's profile directory, and nothing else.
+    const dir = profile.replace(/'/g, "''");
+    spawnSync(
+      "powershell",
+      [
+        "-NoProfile",
+        "-Command",
+        `Get-CimInstance Win32_Process -Filter "Name='msedge.exe' OR Name='chrome.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${dir}') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+      ],
+      { stdio: "ignore" },
+    );
+  }
   await sleep(500);
   try {
     if (ownProfile) rmSync(profile, { recursive: true, force: true, maxRetries: 5 });
