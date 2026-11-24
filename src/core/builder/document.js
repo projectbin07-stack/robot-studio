@@ -86,6 +86,15 @@
  * @property {ExtraElement[]} extras
  * @property {TemplateRef | null} template the template and parameters the document was generated from
  * @property {{ entry: string } | null} source the file an imported document came from (mesh paths resolve from it)
+ * @property {SimDoc} [sim] simulation world, route and settings (not written to URDF)
+ */
+/**
+ * What a document keeps about its simulation (milestone 3). Robot Studio
+ * metadata like the sensor tags: never written to the URDF.
+ * @typedef {object} SimDoc
+ * @property {string} world a bundled world id or an encoded world (sim/world.js encodeWorld)
+ * @property {string} route route id
+ * @property {Record<string, unknown>} settings settings that differ from the defaults
  */
 
 export const SENSOR_KINDS = /** @type {const} */ (["lidar2d", "imu", "camera", "depth_camera"]);

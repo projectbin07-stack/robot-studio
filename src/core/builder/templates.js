@@ -1276,7 +1276,10 @@ export function isTemplateExact(doc) {
   if (!doc.template) return false;
   try {
     const fresh = generate(doc.template.id, doc.template.params);
-    return deepEqual({ ...fresh, source: null }, { ...doc, source: null });
+    // Simulation settings are not part of the robot.
+    const mine = { ...doc, source: null };
+    delete mine.sim;
+    return deepEqual({ ...fresh, source: null }, mine);
   } catch {
     return false;
   }

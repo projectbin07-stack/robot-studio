@@ -19,6 +19,9 @@ import {
   uniqueName,
 } from "./document.js";
 import { inertialFromShape, inertiaShape } from "./inertia.js";
+import { decodeWorld } from "../sim/world.js";
+import { normalizeSettings } from "../sim/settings.js";
+import { ROUTES } from "../sim/routes.js";
 import {
   compose,
   fromXyzRpy,
@@ -66,6 +69,7 @@ import {
  *   | { type: "setInertial", link: string, inertial: InertialDoc | null }
  *   | { type: "computeInertia", link: string, mass?: number, bounds?: MeshBounds }
  *   | { type: "setSensor", link: string, sensor: SensorKind | null }
+ *   | { type: "setSimulation", sim: import("./document.js").SimDoc | null }
  *   | { type: "replaceDocument", doc: RobotDoc, label?: string }} EditOp
  */
 
@@ -197,6 +201,29 @@ export function applyOp(input, op) {
     return d;
   }
   const doc = clone(input);
+  if (op.type === "setSimulation") {
+    if (op.sim === null) {
+      delete doc.sim;
+      return doc;
+    }
+    const sim = op.sim;
+    check(
+      typeof sim.world === "string" && typeof sim.route === "string",
+      "simulation needs a world and a route",
+    );
+    try {
+      decodeWorld(sim.world);
+      normalizeSettings(sim.settings);
+    } catch (e) {
+      throw new EditError(`simulation: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    check(
+      ROUTES.some((r) => r.id === sim.route),
+      `simulation: unknown route '${sim.route}'`,
+    );
+    doc.sim = clone(sim);
+    return doc;
+  }
   switch (op.type) {
     case "setRobotName": {
       check(
@@ -572,6 +599,8 @@ export function describeOp(op) {
       return `inertia of ${op.link}`;
     case "setSensor":
       return `sensor of ${op.link}`;
+    case "setSimulation":
+      return "simulation settings";
     case "replaceDocument":
       return op.label ?? "new robot";
   }
