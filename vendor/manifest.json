@@ -89,6 +89,77 @@
       ]
     },
     {
+      "name": "lidar-slam-lab",
+      "kind": "git",
+      "repo": "https://github.com/projectbin07-stack/lidar-slam-lab.git",
+      "tag": "v0.1.0",
+      "commit": "e58ac1980f03006fc49153a6096886aba694e194",
+      "license": "MIT",
+      "dest": "vendor/lidar-slam-lab",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "2ee6e410671dd3a5f1e91a5488c0c5fcc1ca4b124ad8001fbd1cd2512f1b5bad"
+        },
+        {
+          "path": "src/rng.js",
+          "sha256": "0e6729fffc0897c2e40365eaa4c3720604972024e039eb8c4a97658d995e12a5"
+        },
+        {
+          "path": "src/geometry.js",
+          "sha256": "14780b9fd23f2200f884b9b86155dbf331722832d808702e328b4b0c8bc512a3"
+        },
+        {
+          "path": "src/world.js",
+          "sha256": "edfc7ef4f5d20be1023da7ac035befd68c0547c7269e62d71b37b71d6e7103e1"
+        },
+        {
+          "path": "src/maps.js",
+          "sha256": "17f72821f1a7c1e1a5c791927ccc4d64bf4c4bf86bc2f0a6c43a25f70d5b5000"
+        },
+        {
+          "path": "src/lidar.js",
+          "sha256": "cf4cc079775290d618d0b1b35c0b6011e96875ed91dba994ee0de32318168e08"
+        },
+        {
+          "path": "src/motion.js",
+          "sha256": "b4b3c59c428608286480293d8a699e4670e593479c9ab2cb0913fe3aa55ebf54"
+        },
+        {
+          "path": "src/grid.js",
+          "sha256": "7f8be956dc336370620706bc76f6ea2f253fe91852791e2b6feb4bdc3f9d2e4d"
+        },
+        {
+          "path": "src/distance.js",
+          "sha256": "5a7bc292d6cb4be2196f5a906a179c84bcf09063a199b87444e94940baac29c7"
+        },
+        {
+          "path": "src/scanmatch.js",
+          "sha256": "cc22794c836216be9df1fdf2cb7acad8ae3441800aea206852bb9cb054ec595a"
+        },
+        {
+          "path": "src/mcl.js",
+          "sha256": "30657197307d47f3d03fa2536815e7817d9e01b4bfe4efe4e435baa82871a840"
+        },
+        {
+          "path": "src/metrics.js",
+          "sha256": "b5e9c51f613e7f8f2202cecdc33a49b5d93f7b0ad75b05a6b193abc05f18ee1f"
+        },
+        {
+          "path": "src/autopilot.js",
+          "sha256": "ca8b3f95ab1e0349313c8a08e03466510c3f6acc607792ca2734d80844dede42"
+        },
+        {
+          "path": "src/export.js",
+          "sha256": "27bbdd4c8d33b2c669d53984b97d9aaadf690da7d8e40af1709c2fa3f3de7ff4"
+        },
+        {
+          "path": "src/sim.js",
+          "sha256": "ea5059998f7290b88eda9f3a12e796a41985554c06f6462cff5fe0388a1dbeeb"
+        }
+      ]
+    },
+    {
       "name": "three",
       "kind": "npm",
       "package": "three",

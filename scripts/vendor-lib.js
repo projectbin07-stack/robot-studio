@@ -67,6 +67,26 @@ const URDF_CORE = [
   "checks/wheels.js",
 ].map((f) => `src/core/${f}`);
 
+// lidar-slam-lab: the DOM-free simulation modules. sim.js (its own loop) is
+// vendored only so the tests can run lidar-slam-lab's loop next to Robot
+// Studio's estimator wrapper and compare them; cli.js and app.js are not used.
+const LIDAR_SLAM = [
+  "rng.js",
+  "geometry.js",
+  "world.js",
+  "maps.js",
+  "lidar.js",
+  "motion.js",
+  "grid.js",
+  "distance.js",
+  "scanmatch.js",
+  "mcl.js",
+  "metrics.js",
+  "autopilot.js",
+  "export.js",
+  "sim.js",
+].map((f) => `src/${f}`);
+
 /** @type {Source[]} */
 export const SOURCES = [
   {
@@ -77,6 +97,15 @@ export const SOURCES = [
     dest: "vendor/urdf-inspector",
     license: "MIT",
     files: ["LICENSE", ...URDF_CORE],
+  },
+  {
+    kind: "git",
+    name: "lidar-slam-lab",
+    repo: "https://github.com/projectbin07-stack/lidar-slam-lab.git",
+    tag: "v0.1.0",
+    dest: "vendor/lidar-slam-lab",
+    license: "MIT",
+    files: ["LICENSE", ...LIDAR_SLAM],
   },
   {
     kind: "npm",
