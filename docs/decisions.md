@@ -30,10 +30,12 @@ by GitHub Pages without a build step and does not pin individual files.
 Vendoring keeps the deployed site self-contained and the provenance
 checkable.
 
-lidar-slam-lab (later milestones) has a flat `src/` of DOM-free modules
-(`geometry.js`, `lidar.js`, `world.js`, `grid.js`, ...); it will be added as
-a third `SOURCES` entry vendored to `vendor/lidar-slam-lab/src/` with the
-same tooling, no change to the scheme.
+lidar-slam-lab's DOM-free simulation modules (`geometry.js`, `lidar.js`,
+`world.js`, `maps.js`, `motion.js`, `grid.js`, `distance.js`, `scanmatch.js`,
+`mcl.js`, `metrics.js`, `autopilot.js`, `export.js`, `sim.js`, `rng.js`) are
+the third `SOURCES` entry, vendored at **v0.1.0** to
+`vendor/lidar-slam-lab/src/` with the same tooling and the same CI check
+(milestone 3).
 
 ## 3. three.js is the one third-party runtime library
 
@@ -164,3 +166,58 @@ urdf-inspector measures. CI installs mecanum-kinematics from its public tag,
 loads the exported TOML with its own loader and compares both directions
 with Robot Studio's numbers, so a convention mismatch (wheel order, roller
 signs, lx/ly) fails the build.
+
+## 14. The simulated drive mirrors the firmware instead of a generic motor model
+
+The robot this studio is for runs encoder-odometry-firmware-style wheel
+control, and milestone 4 compares the simulation with that robot. So the
+simulator does not invent its own controller: `src/core/sim/firmware.js`
+follows `lib/odocore` and the firmware's own Python model class by class
+(IK and saturation, blended velocity estimator, PI with feed-forward,
+anti-windup and slew limit, watchdog, SE(2) odometry), and the plant is the
+firmware model's first-order motor with exact encoder edge times. The
+recording carries the firmware's WHEEL_STATE and ODOMETRY fields. CI replays
+the same command schedule through the Python model from the firmware's
+public tag and compares every frame (`scripts/firmware_interop.py`), so a
+change on either side shows up. The simulation step is therefore the
+firmware's control period (10 ms, 10 motor sub-steps).
+
+## 15. The estimators track the drive frame and see re-expressed scans
+
+lidar-slam-lab's estimators assume the LiDAR at the robot's origin. Tracking
+the LiDAR's pose made MCL scatter on turns (an offset LiDAR moves sideways a
+few millimetres per scan, which rot1-trans-rot2 reads as two large
+rotations). Tracking the drive frame (wheel centroid, the centre of
+rotation) and re-expressing each scan from its origin keeps every end point
+exact and lets the vendored code run unchanged; a test checks the wrapper
+against lidar-slam-lab's own loop number for number, and CI against its CLI
+benchmark. The proper fix, a sensor pose in lidar-slam-lab, is upstream
+request 1.
+
+## 16. Worlds are lidar-slam-lab maps plus heights
+
+The world format extends lidar-slam-lab's map JSON with a wall height,
+boxes and cylinders, so lidar-slam-lab still reads every world and its
+bundled maps are reused from the vendored `maps.js`. Height is what makes it
+more than 2D: the LiDAR sees only what is taller than its URDF height, the
+robot collides with everything, the depth camera sees the floor and low
+obstacles. Cylinders are 24-gons for the ray caster (circumscribed, so they
+contain the circle).
+
+## 17. Determinism is tested, not assumed
+
+All randomness comes from lidar-slam-lab's seeded mulberry32 generator, one
+stream per noise source (LiDAR, slip, IMU, MCL), and nothing reads the
+clock; numbers in the recording are written with fixed precision. Tests
+compare two runs byte for byte, two CLI processes, and a golden SHA-256 of
+a fixed run on every CI platform (Ubuntu and Windows, Node 22 and 24).
+The step time the CLI prints is measured and therefore not written to the
+files.
+
+## 18. Simulation settings live in the document and the link, not the URDF
+
+Like sensor tags (decision 12), the world, route and settings are Robot
+Studio metadata: `RobotDoc.sim`, changed by an undoable `setSimulation`
+operation and autosaved, and the link's `sim`, `w`, `r`, `ss` parameters.
+They are not part of the robot: a template robot with simulation settings is
+still "exactly the template" for the parametrised xacro export.
