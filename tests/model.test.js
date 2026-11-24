@@ -242,3 +242,15 @@ test("canonical XML comparison ignores comments, xmlns and attribute order only"
   assert.equal(compareXml(b, `<robot name="r"/>`).firstDifference?.actual, "(end)");
   assert.deepEqual(canonicalLines(b), ['<robot name="r">', '  <link a="1" b="2"> "t"']);
 });
+
+test("sourceOf maps element paths to the file that defined them", async () => {
+  const ex = /** @type {import("../src/core/examples.js").Example} */ (findExample("mecanum"));
+  const m = loadModel(await exampleFs(ex, read), ex.entry);
+  assert.equal(
+    m.sourceOf("/robot/link[@name='lidar_link']"),
+    "/studio_mecanum_description/urdf/sensors.xacro",
+  );
+  assert.equal(m.sourceOf("/robot/link[@name='base_link']/visual[1]"), ex.entry);
+  assert.equal(m.sourceOf("/robot/gazebo"), ex.entry);
+  assert.equal(loadModel(memFs({}), "/x.urdf").sourceOf("/robot"), "/x.urdf");
+});

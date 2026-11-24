@@ -69,6 +69,7 @@ export const STUDIO_CHECKS = {
  * @property {Record<string, string>} args every xacro:arg with its value
  * @property {string[]} files files read
  * @property {XacroError | null} error
+ * @property {(path: string) => string} sourceOf file that defined the element at an element path
  */
 
 /**
@@ -121,6 +122,7 @@ export function loadModel(fs, entry, opts = {}) {
     args: {},
     files: [path],
     error: null,
+    sourceOf: () => path,
   };
   const text = fs.readText(path);
   if (text === null) {
@@ -180,6 +182,7 @@ export function loadModel(fs, entry, opts = {}) {
   const report = inspectXml(xml);
   model.report = report;
   const fileOf = elementFiles(xml, files, path);
+  model.sourceOf = fileOf;
   /** @type {StudioFinding[]} */
   const findings = report.findings.map((f) => ({ ...f, file: fileOf(f.path) }));
 
