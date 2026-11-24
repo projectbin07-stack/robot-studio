@@ -8,6 +8,7 @@ import { simRobot } from "./robot.js";
 import { createSim, step, simErrors, estimates, jointMap, DT } from "./sim.js";
 import { createRoute } from "./routes.js";
 import { recordingFiles } from "./record.js";
+import { compose, inverse } from "./se2.js";
 
 /** @typedef {import("./sim.js").Sim} Sim */
 /** @typedef {import("./firmware.js").Twist} Twist */
@@ -163,6 +164,38 @@ export class SimSession {
     this.history.imu.push(s.t, imu ? [...imu.accel, ...imu.gyro] : [NaN, NaN, NaN, NaN, NaN, NaN]);
     const e = simErrors(s);
     this.history.errors.push(s.t, e ? [e.odom, e.est, e.mcl] : [NaN, NaN, NaN]);
+  }
+
+  /**
+   * The 3D layer's frame (the same shape replays and live robots produce).
+   * @returns {import("../ros/track.js").ViewFrame}
+   */
+  frame() {
+    const s = this.sim;
+    const est = estimates(s);
+    const dp = s.robot.drivePose;
+    return {
+      t: s.t,
+      base: s.truth,
+      q: jointMap(s),
+      scan: s.lastScan,
+      scanPose: s.lastScanPose,
+      lidarHeight: s.lidar?.sensor.height ?? 0,
+      trails: {
+        truth: s.truth,
+        odom: est.odom,
+        est: s.settings.estimators.scanMatching ? est.est : null,
+        mcl: est.mcl,
+      },
+      particles: s.est?.pf ?? null,
+      particleOffset: { x: -dp.x, y: -dp.y, theta: 0 },
+      cloud: s.cloud,
+      cloudPoints: s.cloudPoints,
+      grid: s.est?.grid ?? null,
+      mapFrame: { ...s.world.start },
+      // map -> odom = (map -> base estimate) * (odom -> base)^-1, at the start pose.
+      odomFrame: est.est ? compose(compose(est.est, inverse(est.odom)), s.startBase) : null,
+    };
   }
 
   /** What the view needs this frame. */

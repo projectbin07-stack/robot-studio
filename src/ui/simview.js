@@ -14,6 +14,7 @@ import { compose as compose3, fromXyzRpy } from "../../vendor/urdf-inspector/src
 /** @typedef {import("../core/sim/session.js").SimSession} SimSession */
 /** @typedef {import("../core/sim/se2.js").Pose2} Pose2 */
 /** @typedef {import("./view3d.js").RobotView} RobotView */
+/** @typedef {import("../core/ros/track.js").ViewFrame} ViewFrame */
 
 /** Trajectory colours: truth, wheel odometry, + scan matching, MCL. */
 export const TRAIL_COLORS = { truth: 0x2e9d5b, odom: 0xd8453b, est: 0x2a78d6, mcl: 0x9b5cff };
@@ -89,6 +90,8 @@ export class SimLayer {
     /** @type {LayerOptions} */
     this.opts = { rays: true, map: true, trails: true, particles: false, cloud: true, tf: false };
     this.lastTrailT = -1;
+    /** @type {unknown} */
+    this.lastScanDrawn = null;
     this.group.visible = false;
   }
 
@@ -156,6 +159,19 @@ export class SimLayer {
     this.mapAxes.rotation.z = world.start.theta;
   }
 
+  /**
+   * No world (a live robot or a recording without one): only a floor of
+   * `half` metres around the origin.
+   * @param {number} half
+   */
+  clearWorld(half) {
+    for (const c of [...this.worldGroup.children]) {
+      this.worldGroup.remove(c);
+      if (c instanceof THREE.Mesh) c.geometry.dispose();
+    }
+    this.view.setFloor({ x0: -half, y0: -half, x1: half, y1: half });
+  }
+
   /** Forget trails and the map (after a reset). */
   clear() {
     for (const t of Object.values(this.trails)) {
@@ -172,27 +188,35 @@ export class SimLayer {
   }
 
   /**
-   * Bring everything up to date with the session.
+   * Bring everything up to date with the simulation session.
    * @param {SimSession} session
    */
   update(session) {
-    const sim = session.sim;
-    const robot = sim.robot;
+    this.draw(session.frame(), session.sim.robot);
+  }
+
+  /**
+   * Draw one frame from any source (simulation, replay, live robot).
+   * @param {ViewFrame} f
+   * @param {{ baseHeight: number, rootInBase: import("../../vendor/urdf-inspector/src/core/math.js").Transform }} robot
+   */
+  draw(f, robot) {
     const o = this.opts;
     const z = robot.baseHeight;
     // Robot: world pose of the root frame = base pose (lifted to its height) * root-in-base.
-    const base = sim.truth;
+    const base = f.base;
     const T = compose3(fromXyzRpy([base.x, base.y, z], [0, 0, base.theta]), robot.rootInBase);
     this.view.setBase(matrix4(T));
     this.view.followLight(base.x, base.y);
 
     // LiDAR
-    const scan = sim.lastScan;
-    const sp = sim.lastScanPose;
+    const scan = f.scan;
+    const sp = f.scanPose;
     this.rays.visible = o.rays && !!scan;
     this.hits.visible = o.rays && !!scan;
-    if (scan && sp && sim.lidar) {
-      const h = sim.lidar.sensor.height;
+    if (scan && sp && scan !== this.lastScanDrawn) {
+      this.lastScanDrawn = scan;
+      const h = f.lidarHeight;
       const n = scan.ranges.length;
       const rays = new Float32Array(n * 6);
       const hits = new Float32Array(n * 3);
@@ -215,60 +239,50 @@ export class SimLayer {
       this.hitGeom.setAttribute("position", new THREE.BufferAttribute(hits.subarray(0, m), 3));
     }
 
-    // Trails every 0.1 s of simulated time
-    const est = session.snapshot().estimates;
+    // Trails every 0.1 s
     for (const t of Object.values(this.trails)) t.line.visible = o.trails;
-    if (sim.t - this.lastTrailT >= 0.1 - 1e-9) {
-      this.lastTrailT = sim.t;
-      /** @type {[string, Pose2 | null][]} */
-      const poses = [
-        ["truth", base],
-        ["odom", est.odom],
-        ["est", sim.settings.estimators.scanMatching ? est.est : null],
-        ["mcl", est.mcl],
-      ];
-      for (const [k, p] of poses) if (p) this.pushTrail(this.trails[k], p);
+    if (f.t - this.lastTrailT >= 0.1 - 1e-9 || f.t < this.lastTrailT) {
+      this.lastTrailT = f.t;
+      for (const [k, p] of Object.entries(f.trails)) if (p) this.pushTrail(this.trails[k], p);
     }
 
     // Particles
-    const pf = sim.est?.pf ?? null;
+    const pf = f.particles;
     this.particles.visible = o.particles && !!pf;
     if (pf && o.particles) {
       const pts = new Float32Array(pf.count * 3);
-      const inv = { x: -robot.drivePose.x, y: -robot.drivePose.y, theta: 0 };
       for (let i = 0; i < pf.count; i++) {
-        const p = compose({ x: pf.x[i], y: pf.y[i], theta: pf.theta[i] }, inv);
+        const p = compose({ x: pf.x[i], y: pf.y[i], theta: pf.theta[i] }, f.particleOffset);
         pts.set([p.x, p.y, 0.01], i * 3);
       }
       this.particleGeom.setAttribute("position", new THREE.BufferAttribute(pts, 3));
     }
 
     // Depth cloud
-    this.cloud.visible = o.cloud && !!sim.cloud;
-    if (sim.cloud && o.cloud)
+    this.cloud.visible = o.cloud && !!f.cloud;
+    if (f.cloud && o.cloud)
       this.cloudGeom.setAttribute(
         "position",
-        new THREE.BufferAttribute(sim.cloud.subarray(0, sim.cloudPoints * 3), 3),
+        new THREE.BufferAttribute(f.cloud.subarray(0, f.cloudPoints * 3), 3),
       );
 
     // Map, twice a second
-    if (o.map && sim.est && (this.mapAt < 0 || sim.t - this.mapAt >= 0.5)) {
-      this.mapAt = sim.t;
-      this.drawMap(sim.est.grid);
+    if (o.map && f.grid && (this.mapAt < 0 || Math.abs(f.t - this.mapAt) >= 0.5)) {
+      this.mapAt = f.t;
+      this.drawMap(f.grid);
     }
-    if (this.mapMesh) this.mapMesh.visible = o.map && !!sim.est;
+    if (this.mapMesh) this.mapMesh.visible = o.map && !!f.grid;
 
     // Frames: map at the start pose, odom where wheel odometry puts it.
     this.mapAxes.visible = o.tf;
-    this.odomAxes.visible = o.tf;
-    if (o.tf && est.est) {
-      // map -> odom = (map -> base estimate) * (odom -> base)^-1
-      const odomInMap = compose(est.est, invert2(est.odom));
-      const startInOdom = compose(odomInMap, sim.startBase);
-      this.odomAxes.position.set(startInOdom.x, startInOdom.y, 0.004);
-      this.odomAxes.rotation.z = startInOdom.theta;
+    this.mapAxes.position.set(f.mapFrame.x, f.mapFrame.y, 0.002);
+    this.mapAxes.rotation.z = f.mapFrame.theta;
+    this.odomAxes.visible = o.tf && !!f.odomFrame;
+    if (f.odomFrame) {
+      this.odomAxes.position.set(f.odomFrame.x, f.odomFrame.y, 0.004);
+      this.odomAxes.rotation.z = f.odomFrame.theta;
     }
-    this.view.setPose(session.snapshot().q);
+    this.view.setPose(f.q);
   }
 
   /**
@@ -325,11 +339,4 @@ export class SimLayer {
     }
     this.mapTex.needsUpdate = true;
   }
-}
-
-/** @param {Pose2} p */
-function invert2(p) {
-  const c = Math.cos(p.theta);
-  const s = Math.sin(p.theta);
-  return { x: -c * p.x - s * p.y, y: s * p.x - c * p.y, theta: -p.theta };
 }

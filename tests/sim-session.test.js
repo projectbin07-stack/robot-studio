@@ -35,6 +35,12 @@ test("real time becomes fixed 10 ms steps; a stalled tab cannot run away", () =>
   const snap = s.snapshot();
   assert.ok(snap.errors && snap.scan && snap.scanPose);
   assert.equal(Object.keys(snap.q).length, 4);
+  // The 3D layer's frame: the same shape replays and live robots produce.
+  const f = s.frame();
+  assert.equal(f.base, s.sim.truth);
+  assert.ok(f.grid && f.scan && f.trails.odom && f.trails.est && f.odomFrame);
+  assert.equal(f.lidarHeight, s.sim.lidar?.sensor.height);
+  assert.deepEqual(f.mapFrame, s.world.start);
   s.reset();
   assert.equal(s.sim.t, 0);
   assert.equal(s.history.twist.length, 1);
