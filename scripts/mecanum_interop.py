@@ -12,8 +12,15 @@ For every tests/corpus/builder/<case>.toml written by the builder
 4. runs mecanum-kinematics' forward kinematics on Robot Studio's wheel
    speeds and checks that it returns the original twist (round trip).
 
+It then checks the simulator: tests/corpus/sim/mecanum-wheel-speeds.json holds
+the wheel speeds Robot Studio's simulated drive settles at for a set of body
+twists (scripts/sim-fixtures.js), some of them beyond the wheels' speed limit.
+mecanum-kinematics' inverse_saturated() must give the ideal-wheel speeds to
+1e-9 (including the saturation scale), and the motor + PI model's speeds
+after 3 s must be within 0.01 rad/s of them.
+
 CI installs mecanum-kinematics from its public tag (see .github/workflows/ci.yml).
-Exit code 0 when every comparison agrees to 1e-9.
+Exit code 0 when every comparison agrees.
 """
 
 from __future__ import annotations
@@ -68,6 +75,49 @@ def check_case(toml: Path) -> list[str]:
     return problems
 
 
+SIM = ROOT / "tests" / "corpus" / "sim" / "mecanum-wheel-speeds.json"
+PI_TOL = 0.01
+
+
+def check_sim() -> list[str]:
+    ref = json.loads(SIM.read_text(encoding="utf-8"))
+    cfg = RobotConfig.from_toml(DIR / ref["toml"])
+    problems: list[str] = []
+    if abs(float(cfg.max_wheel_speed) - float(ref["max_wheel_speed"])) > TOL:
+        problems.append(
+            f"max_wheel_speed: TOML {cfg.max_wheel_speed}, simulator {ref['max_wheel_speed']}"
+        )
+    model = MecanumKinematics(cfg)
+    worst_ideal = 0.0
+    worst_pi = 0.0
+    worst_scale = 0.0
+    saturated = 0
+    for case in ref["cases"]:
+        t = case["twist"]
+        cmd = model.inverse_saturated(Twist(t["vx"], t["vy"], t["wz"]))
+        saturated += int(cmd.saturated)
+        worst_scale = max(worst_scale, abs(float(cmd.scale) - float(case["scale"])))
+        for theirs, ideal, pi in zip(
+            cmd.speeds, case["ideal_speeds"], case["pi_speeds_after_3s"], strict=True
+        ):
+            worst_ideal = max(worst_ideal, abs(float(theirs) - ideal))
+            worst_pi = max(worst_pi, abs(float(theirs) - pi))
+    if worst_ideal > TOL or worst_scale > TOL:
+        problems.append(
+            f"simulated ideal wheel speeds differ by up to {worst_ideal:.3g} rad/s "
+            f"(saturation scale by {worst_scale:.3g})"
+        )
+    if worst_pi > PI_TOL:
+        problems.append(f"PI-model wheel speeds after 3 s differ by up to {worst_pi:.3g} rad/s")
+    print(
+        f"{SIM.name}: {len(ref['cases'])} twists ({saturated} saturated) vs "
+        f"inverse_saturated(): ideal wheels max |diff| {worst_ideal:.2e} rad/s, "
+        f"scale {worst_scale:.2e}; motor + PI model after 3 s max |diff| {worst_pi:.2e} rad/s: "
+        f"{'OK' if not problems else 'FAIL'}"
+    )
+    return problems
+
+
 def main() -> int:
     files = sorted(DIR.glob("*.toml"))
     if not files:
@@ -79,6 +129,9 @@ def main() -> int:
         for p in check_case(f):
             failed = True
             print(f"  FAIL {p}")
+    for p in check_sim():
+        failed = True
+        print(f"  FAIL {p}")
     return 1 if failed else 0
 
 
