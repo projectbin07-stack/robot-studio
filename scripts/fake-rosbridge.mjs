@@ -165,6 +165,8 @@ export class FakeServer {
     /** @type {{ t: number, op: string, topic?: string, msg?: unknown, raw: Record<string, unknown> }[]} */
     this.received = [];
     this.connections = 0;
+    /** Replayed messages not sent because a client's socket buffer was full. */
+    this.droppedForSlowClients = 0;
     this.t0 = performance.now();
     this.http = createServer((_req, res) => {
       res.writeHead(426, { "content-type": "text/plain" });
@@ -294,7 +296,13 @@ export class FakeServer {
         this.loopStart + (fx[this.cursor].dt * 1000) / speed <= now
       ) {
         const f = fx[this.cursor++];
-        for (const c of this.conns) if (c.subs.has(f.topic)) c.send(f.line);
+        for (const c of this.conns) {
+          if (!c.subs.has(f.topic)) continue;
+          // Like rosbridge with a small queue: drop replayed data for a client that
+          // is not keeping up, so replies and test messages are not stuck behind it.
+          if (c.socket.writableLength > 65536) this.droppedForSlowClients++;
+          else c.send(f.line);
+        }
       }
       if (this.cursor >= fx.length) {
         this.cursor = 0;

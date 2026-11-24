@@ -306,8 +306,9 @@ test("live view against the fake server: subscriptions, TF, scans, joints, robot
     const sum = live.topicSummary();
     const scanRow = sum.find((r) => r.topic === "/scan");
     assert.ok(scanRow && scanRow.hz > 0 && scanRow.age !== null);
-    // A message that fails its checks is counted, not shown.
-    s.broadcast(
+    // A message that fails its checks is counted, not shown. (Handed to the client
+    // directly: the network path of bad messages is the next test's.)
+    client.receive(
       JSON.stringify({
         op: "publish",
         topic: "/scan",
