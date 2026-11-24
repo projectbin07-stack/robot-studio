@@ -8,3 +8,4 @@ docs/img/
 _site/
 .venv/
 python/tests/fixtures/
+tests/fixtures/rosbridge/
