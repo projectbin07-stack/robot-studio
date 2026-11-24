@@ -29,6 +29,8 @@ import { addChild, addSensor, collisionFromVisual } from "../core/builder/action
 import { rootLinks } from "../core/builder/document.js";
 import { VirtualFs as EmptyFs } from "../core/vfs.js";
 import { renderProperties, renderTemplateForm } from "./builder.js";
+import { initSim } from "./simui.js";
+import { deepEqual } from "../core/builder/document.js";
 
 /** @typedef {import("../core/model.js").LoadedModel} LoadedModel */
 /** @typedef {import("../core/vfs.js").VirtualFs} VirtualFs */
@@ -75,6 +77,11 @@ const NO_FILES = new EmptyFs();
 const viewFs = () => (editor ? (editMeshFs ?? NO_FILES) : /** @type {VirtualFs} */ (fs));
 
 const view = new RobotView($("view"), (link) => select(link ? { kind: "link", name: link } : null));
+/** The simulation panel (set up at the end of this module). @type {ReturnType<typeof initSim> | null} */
+let simUi = null;
+/** The opened model as an editable document, for the simulator (sensor tags, Gazebo tags). */
+/** @type {{ model: LoadedModel, doc: import("../core/builder/document.js").RobotDoc | null } | null} */
+let viewerDoc = null;
 
 // ---------------------------------------------------------------- theme
 const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -317,6 +324,8 @@ function openModel() {
     setStatus(`ready: ${sourceLabel}`);
     document.body.dataset.state = m.error ? "error" : "ready";
     document.body.dataset.links = String(m.report?.summary.links ?? 0);
+    simUi?.robotChanged();
+    simUi?.openFromLink();
   });
 }
 
@@ -727,6 +736,8 @@ function renderTemplateUi(force = false) {
     try {
       if (live) {
         const doc = generate(t.id, next);
+        const sim = editor_().doc.sim;
+        if (sim) doc.sim = sim; // a parameter change keeps the simulation settings
         $("template-error").textContent = "";
         edit({ type: "replaceDocument", doc, label: `${k} = ${fmtValue(value)}` });
       } else {
@@ -924,6 +935,8 @@ async function showEditor(frame, t0 = performance.now()) {
   document.body.dataset.links = String(m.report?.summary.links ?? 0);
   document.body.dataset.editMs = (performance.now() - t0).toFixed(1);
   document.body.dataset.version = String(editor.version);
+  simUi?.robotChanged();
+  simUi?.openFromLink();
 }
 
 let packageNameEdited = false;
@@ -1047,6 +1060,32 @@ function restoreAutosave() {
   return true;
 }
 $("btn-restore").addEventListener("click", restoreAutosave);
+
+// ---------------------------------------------------------------- simulation
+simUi = initSim({
+  view,
+  state,
+  saveUrl,
+  robot() {
+    if (editor)
+      return { model: editor.model, doc: editor.doc, label: `builder robot '${editor.doc.name}'` };
+    if (!model?.urdf) return null;
+    if (viewerDoc?.model !== model) {
+      const imp = importUrdf(model.urdf, { entry: model.entry });
+      viewerDoc = { model, doc: imp.doc };
+    }
+    return { model, doc: viewerDoc.doc, label: sourceLabel };
+  },
+  docSim: () => editor?.doc.sim ?? null,
+  storeDocSim(sim) {
+    // Kept in the document (autosaved, undoable) without redrawing the robot.
+    if (!editor || deepEqual(editor.doc.sim ?? null, sim)) return;
+    editor.apply({ type: "setSimulation", sim });
+    $("edit-status").textContent = "simulation settings";
+    updateEditUi();
+    autosave();
+  },
+});
 
 // ---------------------------------------------------------------- start
 document.title = `Robot Studio ${VERSION}`;

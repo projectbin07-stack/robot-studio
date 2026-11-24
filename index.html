@@ -6,7 +6,7 @@
     <title>Robot Studio</title>
     <meta
       name="description"
-      content="Open or build a robot model in the browser: URDF or xacro, a whole description package or a zip, or a mecanum, differential or arm template. xacro is expanded in the page, the model is checked and shown in 3D, and exported as URDF, xacro, a mecanum-kinematics config or a ROS 2 package. Nothing is uploaded."
+      content="Open, build and simulate a robot model in the browser: URDF or xacro, a whole description package or a zip, or a mecanum, differential or arm template. xacro is expanded in the page, the model is checked and shown in 3D, exported as URDF, xacro, a mecanum-kinematics config or a ROS 2 package, and driven in a simulated world with LiDAR, IMU, encoders and SLAM estimators. Nothing is uploaded."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="stylesheet" href="styles.css" />
@@ -80,6 +80,94 @@
             <p class="summary" id="summary"></p>
           </div>
         </details>
+        <details class="panel" id="p-sim">
+          <summary>Simulate <span class="badge-sim">simulated</span></summary>
+          <div class="panel-body">
+            <p class="note">
+              Drive this robot in a 2D world with heights: simulated wheels, encoders, IMU and LiDAR
+              at the robot's URDF frames, wheel odometry, scan matching and MCL. Everything here is
+              model output, not a measurement.
+            </p>
+            <div class="row">
+              <button type="button" id="sim-open">Simulate this robot</button>
+            </div>
+            <div id="sim-controls" hidden>
+              <div class="row">
+                <button type="button" id="sim-run">Pause</button>
+                <button type="button" id="sim-reset">Reset</button>
+                <label class="field inline"
+                  ><span>Speed</span>
+                  <select id="sim-speed">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="2">2x</option>
+                    <option value="4">4x</option>
+                  </select>
+                </label>
+              </div>
+              <label class="field"
+                ><span>World</span>
+                <select id="sim-world"></select>
+              </label>
+              <label class="field"
+                ><span>Route</span>
+                <select id="sim-route"></select>
+              </label>
+              <p class="note">
+                Drive by hand at any time: W/S or arrows forward and back, A/D turn, Q/E strafe
+                (mecanum), Space stop; a gamepad's sticks; or the on-screen sticks.
+              </p>
+              <details class="sub" id="sim-world-editor">
+                <summary>Edit the world</summary>
+                <div class="seg tools" role="group" aria-label="World tool">
+                  <button type="button" data-tool="wall" aria-pressed="true">Wall</button>
+                  <button type="button" data-tool="box">Box</button>
+                  <button type="button" data-tool="cylinder">Cylinder</button>
+                  <button type="button" data-tool="erase">Erase</button>
+                  <button type="button" data-tool="start">Start</button>
+                  <button type="button" data-tool="route">Route</button>
+                </div>
+                <canvas id="world-canvas" aria-label="World map editor"></canvas>
+                <div class="row">
+                  <label class="field inline"
+                    ><span>Box height (m)</span><input type="text" id="box-h" value="0.5" size="4"
+                  /></label>
+                  <label class="field inline"
+                    ><span>Cylinder height (m)</span
+                    ><input type="text" id="cyl-h" value="1" size="4"
+                  /></label>
+                </div>
+                <div class="row">
+                  <button type="button" id="world-clear-route">Clear route</button>
+                  <button type="button" id="world-save">Save .json</button>
+                  <label class="button-like" for="world-load">Load .json</label>
+                  <input type="file" id="world-load" accept=".json" hidden />
+                </div>
+                <p class="note">
+                  Drag to draw walls, boxes (a rectangle) and cylinders (centre to radius); click to
+                  erase or add a waypoint; drag from the start to set its heading. Obstacles lower
+                  than the LiDAR are drawn orange in 3D: the LiDAR cannot see them.
+                </p>
+              </details>
+              <details class="sub" id="sim-settings">
+                <summary>Sensors, drive and estimators</summary>
+                <div id="sim-fields"></div>
+                <label class="field"
+                  ><span>IMU calibration (imu-calibration-lab JSON)</span>
+                  <input type="file" id="imu-cal" accept=".json" />
+                </label>
+                <p class="note" id="imu-cal-note"></p>
+              </details>
+              <div class="row">
+                <button type="button" id="sim-download">Download recording (.zip)</button>
+              </div>
+              <p class="note" id="sim-note" role="status"></p>
+              <div class="row">
+                <button type="button" id="sim-close">Close the simulation</button>
+              </div>
+            </div>
+          </div>
+        </details>
         <details class="panel" id="p-build" open>
           <summary>Build</summary>
           <div class="panel-body">
@@ -149,6 +237,36 @@
           <label class="toggle"><input type="checkbox" id="opt-com" /> Centre of mass</label>
           <button type="button" id="btn-fit">Fit view</button>
         </div>
+        <div class="sim-hud" id="sim-hud" hidden>
+          <div class="hud-title">
+            <span class="badge-sim">Simulated</span> <span id="hud-time"></span>
+          </div>
+          <table id="hud-errors"></table>
+          <div class="hud-perf" id="hud-perf"></div>
+        </div>
+        <div
+          class="toolbar sim-layers"
+          id="sim-layers"
+          role="toolbar"
+          aria-label="Simulation layers"
+          hidden
+        >
+          <label class="toggle"><input type="checkbox" data-layer="rays" checked /> LiDAR</label>
+          <label class="toggle"><input type="checkbox" data-layer="map" checked /> Map</label>
+          <label class="toggle"
+            ><input type="checkbox" data-layer="trails" checked /> Trajectories</label
+          >
+          <label class="toggle"><input type="checkbox" data-layer="particles" /> Particles</label>
+          <label class="toggle"><input type="checkbox" data-layer="cloud" checked /> Depth</label>
+          <label class="toggle"><input type="checkbox" data-layer="tf" /> TF</label>
+          <label class="toggle"><input type="checkbox" data-layer="follow" checked /> Follow</label>
+        </div>
+        <div class="sticks" id="sticks" hidden>
+          <div class="stick" id="stick-move" title="Drive: forward, back and sideways">
+            <span></span>
+          </div>
+          <div class="stick" id="stick-turn" title="Turn"><span></span></div>
+        </div>
         <p class="hint" id="hint">
           Drag to orbit, right-drag to pan, scroll to zoom, click a part to select it. Z is up (REP
           103).
@@ -157,6 +275,15 @@
       </section>
 
       <aside class="side right">
+        <details class="panel" id="p-plots" open hidden>
+          <summary>Live plots <span class="badge-sim">simulated</span></summary>
+          <div class="panel-body plots">
+            <canvas id="plot-wheels"></canvas>
+            <canvas id="plot-twist"></canvas>
+            <canvas id="plot-imu"></canvas>
+            <canvas id="plot-errors"></canvas>
+          </div>
+        </details>
         <details class="panel" id="p-details" open>
           <summary id="details-title">Details</summary>
           <div class="panel-body" id="details">
@@ -206,9 +333,9 @@
       </aside>
     </main>
     <footer class="foot">
-      Robot Studio 0.2 · Validation: software tests only (xacro output compared with the official
-      xacro, builder exports with the official xacro and mecanum-kinematics in CI); no simulation or
-      hardware results yet ·
+      Robot Studio 0.3 · Validation: software tests (xacro output compared with the official xacro,
+      builder exports with the official xacro and mecanum-kinematics in CI); simulation results are
+      model output, labelled simulated; no hardware results yet ·
       <a href="https://github.com/projectbin07-stack/robot-studio#validation-status">details</a>
     </footer>
   </body>

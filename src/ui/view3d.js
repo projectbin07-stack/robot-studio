@@ -100,6 +100,11 @@ export class RobotView {
     /** Parsed meshes per file system and path, reused when the builder redraws. */
     /** @type {WeakMap<VirtualFs, Map<string, Promise<import("./meshes.js").LoadedMesh>>>} */
     this.meshCache = new WeakMap();
+    /** Floor extent while a simulation world is shown: { x0, y0, x1, y1 } in metres. */
+    /** @type {{ x0: number, y0: number, x1: number, y1: number } | null} */
+    this.floor = null;
+    /** While true, render() does nothing (the simulation draws once per frame). */
+    this.holdRender = false;
     /** Bounding boxes of loaded meshes in their file coordinates, by "link|kind|index". */
     /** @type {Map<string, { min: [number, number, number], max: [number, number, number] }>} */
     this.meshBounds = new Map();
@@ -120,6 +125,7 @@ export class RobotView {
   }
 
   render() {
+    if (this.holdRender) return;
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -135,6 +141,23 @@ export class RobotView {
 
   rebuildGrid() {
     if (this.grid) this.scene.remove(this.grid);
+    if (this.floor) {
+      // A 0.5 m grid over the simulated world.
+      const f = this.floor;
+      const extent = Math.ceil(Math.max(f.x1 - f.x0, f.y1 - f.y0) + 2);
+      this.grid = new THREE.GridHelper(
+        extent,
+        extent * 2,
+        this.dark ? 0x59606b : 0xa9b0ba,
+        this.dark ? 0x2b3038 : 0xdde1e6,
+      );
+      this.grid.rotation.x = Math.PI / 2;
+      this.grid.position.set((f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, -0.0005);
+      this.scene.add(this.grid);
+      this.ground.scale.set(extent, extent, 1);
+      this.ground.position.set((f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2, 0);
+      return;
+    }
     const step = 10 ** Math.floor(Math.log10(this.size / 2));
     const divisions = Math.min(200, Math.max(10, Math.ceil((this.size * 6) / step)));
     const extent = divisions * step;
@@ -377,6 +400,47 @@ export class RobotView {
     this.comMarker.visible = this.opts.com && p.com !== null;
     this.render();
     return p;
+  }
+
+  /**
+   * Place the model's root frame in the world (simulation), or back at the
+   * origin with null. `m` is a column-major 4x4 matrix.
+   * @param {number[] | null} m
+   */
+  setBase(m) {
+    for (const g of [this.robot, this.overlay]) {
+      g.matrixAutoUpdate = false;
+      if (m) g.matrix.fromArray(m);
+      else g.matrix.identity();
+      g.matrixWorldNeedsUpdate = true;
+    }
+  }
+
+  /**
+   * Show a floor and grid for a simulated world (null: back to the model's own grid).
+   * @param {{ x0: number, y0: number, x1: number, y1: number } | null} f
+   */
+  setFloor(f) {
+    this.floor = f;
+    this.rebuildGrid();
+    this.render();
+  }
+
+  /**
+   * Keep the shadow-casting light over a moving robot.
+   * @param {number} x
+   * @param {number} y
+   */
+  followLight(x, y) {
+    const r = Math.max(this.size, 0.5);
+    const s = Math.max(r * 3, 0.5);
+    this.key.position.set(x + s * 0.6, y - s * 0.4, s * 1.4);
+    this.key.target.position.set(x, y, 0);
+    const cam = this.key.shadow.camera;
+    cam.left = cam.bottom = -r * 2;
+    cam.right = cam.top = r * 2;
+    cam.far = s * 4;
+    cam.updateProjectionMatrix();
   }
 
   /** Frame the camera on everything drawn (meshes included). */
