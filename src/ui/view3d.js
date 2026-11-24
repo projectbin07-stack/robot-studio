@@ -241,7 +241,7 @@ export class RobotView {
     this.applyOptions();
     const reports = await Promise.all(pending);
     if (gen !== this.generation) return [];
-    this.render();
+    this.fit();
     return /** @type {MeshReport[]} */ (reports.filter((r) => r !== null));
   }
 
@@ -355,6 +355,17 @@ export class RobotView {
     this.comMarker.visible = this.opts.com && p.com !== null;
     this.render();
     return p;
+  }
+
+  /** Frame the camera on everything drawn (meshes included). */
+  fit() {
+    const box = new THREE.Box3().setFromObject(this.robot);
+    if (box.isEmpty()) return this.render();
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    this.size = Math.max(0.05, sphere.radius);
+    this.frame([sphere.center.x, sphere.center.y, sphere.center.z], this.size * 1.3);
+    this.rebuildGrid();
+    this.render();
   }
 
   /**

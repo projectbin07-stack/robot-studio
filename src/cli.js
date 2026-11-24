@@ -141,7 +141,8 @@ function run(argv, io) {
 
   if (cmd === "xacro") {
     try {
-      const r = expandXacro(entry, fs, { args, cwd });
+      const env = /** @type {Record<string, string>} */ (process.env);
+      const r = expandXacro(entry, fs, { args, cwd, env });
       for (const m of r.messages) io.err(`${m.level}: ${m.text} (${m.file}:${m.line})\n`);
       const xml = serializeXml(r.root);
       if (values.output) {
@@ -158,7 +159,10 @@ function run(argv, io) {
     }
   }
 
-  const model = loadModel(fs, entry, { args });
+  const model = loadModel(fs, entry, {
+    args,
+    env: /** @type {Record<string, string>} */ (process.env),
+  });
   for (const f of model.findings) f.file = rel(f.file);
   model.files = model.files.map(rel);
   const s = model.report?.summary;
