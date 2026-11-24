@@ -99,7 +99,7 @@ export function defaultSimSettings() {
       particles: DEFAULT_ESTIMATORS.particles,
       mclGlobal: DEFAULT_ESTIMATORS.mclGlobal,
     },
-    depth: { enabled: false, width: 32, height: 24, hfovDeg: 70, maxRange: 5, rateHz: 2 },
+    depth: { enabled: true, width: 32, height: 24, hfovDeg: 70, maxRange: 5, rateHz: 2 },
   };
 }
 

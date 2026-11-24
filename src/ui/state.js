@@ -16,6 +16,10 @@ import { EXAMPLES } from "../core/examples.js";
  * @property {Record<string, number>} q joint positions (examples only)
  * @property {Record<string, string>} args xacro argument overrides (examples only)
  * @property {"auto" | "light" | "dark"} theme
+ * @property {boolean} sim the simulation is open
+ * @property {string} world bundled world id or encoded world (core/sim/world.js encodeWorld)
+ * @property {string} route route id
+ * @property {Record<string, unknown>} simSettings simulation settings that differ from the defaults
  */
 
 /** @returns {PageState} */
@@ -30,6 +34,10 @@ export function defaultState() {
     q: {},
     args: {},
     theme: "auto",
+    sim: false,
+    world: "office",
+    route: "demo",
+    simSettings: {},
   };
 }
 
@@ -66,6 +74,14 @@ export function encodeState(st) {
     if (a.length > 0) p.set("a", a.map(([n, v]) => `${n}:${v}`).join(","));
   }
   if (st.theme !== d.theme) p.set("theme", st.theme);
+  if (st.sim) {
+    p.set("sim", "1");
+    if (st.world !== d.world) p.set("w", st.world);
+    if (st.route !== d.route) p.set("r", st.route);
+    const ss = { ...st.simSettings };
+    delete ss.imu; // a calibration file is not put in a link
+    if (Object.keys(ss).length > 0) p.set("ss", JSON.stringify(ss));
+  }
   return p.toString();
 }
 
@@ -101,6 +117,20 @@ export function decodeState(search) {
     const name = part.slice(0, k);
     const v = part.slice(k + 1);
     if (/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name) && ARG_VALUE.test(v)) st.args[name] = v;
+  }
+  if (p.get("sim") === "1") st.sim = true;
+  const w = p.get("w");
+  if (w && w.length <= 20000) st.world = w;
+  const r = p.get("r");
+  if (r && /^[a-z]{1,16}$/.test(r)) st.route = r;
+  const ss = p.get("ss");
+  if (ss && ss.length <= 4000) {
+    try {
+      const v = JSON.parse(ss);
+      if (v && typeof v === "object" && !Array.isArray(v)) st.simSettings = v;
+    } catch {
+      // ignored: a malformed link falls back to the defaults
+    }
   }
   const theme = p.get("theme");
   if (theme && THEMES.includes(theme)) st.theme = /** @type {PageState["theme"]} */ (theme);
