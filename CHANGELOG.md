@@ -4,6 +4,61 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-11-25
+
+Milestone 4, "ROS 2". Validation: software tests; simulation (bags,
+replays and comparisons made from simulated runs are labelled simulated);
+hardware none: no robot has been connected and no robot bag has been read.
+
+### Added
+
+- ROS 2 panel ([docs/ros2.md](docs/ros2.md)): a live robot over rosbridge
+  with a rosbridge v2 client written from the protocol (subscribe,
+  advertise, publish, call_service, status, fragments, reconnect);
+  `/joint_states`, `/tf`, `/tf_static`, `/scan`, `/imu`, `/odom` and
+  `robot_description` shown with the simulation's 3D layers, plots and HUD
+  under a LIVE badge, the LiDAR at its `/tf_static` mount, scan matching on
+  the robot's odometry, and a per-topic rate / age / rejected table. The
+  address is checked and a link (`?ros=`) only pre-fills it.
+- Driving a real robot: `/cmd_vel` from the keyboard, gamepad and touch
+  teleop through a dead-man gate (explicit per-arming opt-in, 10 Hz while
+  held, zero on release, blur, stale input, hide and disconnect, the last
+  two disarming; speed capped at 10 to 100 % of the URDF wheel limit;
+  "DRIVING A REAL ROBOT" banner).
+- ROS 2 bag export: `robot-studio sim --bag`, `robot-studio bag`, and
+  "Download ROS 2 bag" in the Simulate panel write rosbag2 directories
+  (MCAP + `metadata.yaml`, CDR, Humble definitions) with `/tf_static`,
+  `/tf`, `/odom`, `/scan`, `/imu`, `/joint_states`, `/cmd_vel`,
+  `/firmware/wheel_state`, `/ground_truth` and `/robot_studio/source`
+  (simulated: true).
+- `robot-studio-bag` (`python/`): turns a ROS 2 bag into the recording
+  format using rosbag-inspect v0.2.0 as a library; LaserScan arrays kept,
+  inf / NaN / out-of-range as no return, LiDAR mount from `/tf_static`.
+- Replay of recordings through the estimators and views (`robot-studio
+replay`, "Replay a recording"), labelled Replay / SIMULATED data.
+- Simulation vs recording (`robot-studio compare`, "Compare with the
+  simulator"): a recording's `/cmd_vel` schedule on the simulator, compared
+  through the firmware's ODOMETRY and WHEEL_STATE fields.
+- Tests against an in-repo fake rosbridge server (RFC 6455 on
+  `node:http`) with message fixtures from a simulated run; CI jobs for the
+  Python companion, the bag round trip value by value, and ROS 2 Humble
+  reading the exported bag (`ros2 bag info`, `rosbag2_py` + `rclpy`); the
+  browser job drives the live view against the fake server and checks the
+  Twists it received.
+
+### Changed
+
+- The recording's scans header carries the LiDAR mount, and `summary.json`
+  the URDF's fixed joints, base height, drive pose and root frame offset
+  (the golden digest changed for those two files only).
+- The 3D simulation layer draws a view frame (`SimSession.frame()`), shared
+  by simulation, replay and live robot.
+- Version 0.4.0.
+
+### Fixed
+
+- A plot with no data labelled its axis "NaN".
+
 ## [0.3.0] - 2026-11-24
 
 Milestone 3, "simulation". Validation: software tests; simulation results

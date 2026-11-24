@@ -289,21 +289,20 @@ minutes) writes:
 | `summary.json`        |            | robot, world, route, seed, changed settings, sensor parameters and sources, distance, collisions, errors, map precision, notes                                                                        |
 
 All times are simulated seconds from the start (`t_us` is the firmware's
-32-bit microsecond clock, starting at 0). The planned bag export
-(milestone 4) maps the files to topics like this:
+32-bit microsecond clock, starting at 0). Since 0.4 the scans header also
+carries the LiDAR's `mount` in the base frame (x, y, z, yaw), and
+`summary.json`'s `robot` the URDF's fixed joints (`static_transforms`),
+`base_height`, `drive_pose` and `root_in_base`, which a bag needs.
 
-| Topic                   | Type                         | From                      | Frame and mapping                                                                                                                                                                                                                                                                                                 |
-| ----------------------- | ---------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/scan`                 | `sensor_msgs/msg/LaserScan`  | `scans.jsonl`             | `header.frame_id` = the LiDAR link; `angle_min`, `angle_increment`, `range_min`, `range_max`, `scan_time` from the header line, `angle_max = angle_min + (n − 1)·angle_increment`, `time_increment` 0 (no motion distortion is simulated); `null` → `+inf` (REP 117: no return within range); `intensities` empty |
-| `/imu`                  | `sensor_msgs/msg/Imu`        | `imu.csv`                 | `frame_id` = the IMU link; `linear_acceleration` = `ax, ay, az`, `angular_velocity` = `gx, gy, gz`; no orientation estimate: `orientation_covariance[0] = −1`; covariances from the error model's noise in `summary.json`                                                                                         |
-| `/odom`                 | `nav_msgs/msg/Odometry`      | `odometry.csv`            | `frame_id` `odom`, `child_frame_id` = the base frame; pose x, y, yaw → quaternion; twist `vx, vy, wz`; (or 100 Hz from the `odom_*` columns of `trajectory.csv`)                                                                                                                                                  |
-| `/joint_states`         | `sensor_msgs/msg/JointState` | `joint_states.csv`        | `name` from the column headers, `position`, `velocity`; `effort` empty                                                                                                                                                                                                                                            |
-| `/tf`                   | `tf2_msgs/msg/TFMessage`     | `trajectory.csv`          | `odom` → base frame from the wheel odometry columns; `map` → `odom` from the scan-matched pose (map→base · (odom→base)⁻¹); optionally `world` → base frame (ground truth, a separate frame so it cannot be mistaken for an estimate)                                                                              |
-| `/tf_static`            | `tf2_msgs/msg/TFMessage`     | the URDF                  | fixed joints, as robot_state_publisher publishes them                                                                                                                                                                                                                                                             |
-| `/ground_truth` (extra) | `nav_msgs/msg/Odometry`      | `trajectory.csv` `true_*` | labelled simulated                                                                                                                                                                                                                                                                                                |
-
-Stamps: simulated time from the bag's start; the bag metadata should carry
-the `summary.json` note that the data is simulated.
+The ROS 2 bag export (`--bag DIR`, `robot-studio bag`, "Download ROS 2
+bag") writes these files as `/tf_static`, `/tf`, `/odom`, `/scan`, `/imu`,
+`/joint_states`, `/cmd_vel`, `/firmware/wheel_state`, `/ground_truth` and
+`/robot_studio/source` (which says the data is simulated); the full
+mapping, frames and clock are in [ros2.md](ros2.md#bag-export). Two
+choices differ from the plan written for milestone 3: the ground truth is
+in the `map` frame (a separate `world` frame was not in the TF tree), and
+the bag's clock starts at 1 s because ROS tools read a stamp of 0 as "not
+set".
 
 ## Settings
 

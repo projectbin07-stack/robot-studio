@@ -221,3 +221,57 @@ Studio metadata: `RobotDoc.sim`, changed by an undoable `setSimulation`
 operation and autosaved, and the link's `sim`, `w`, `r`, `ss` parameters.
 They are not part of the robot: a template robot with simulation settings is
 still "exactly the template" for the parametrised xacro export.
+
+## 19. Our own rosbridge client, and our own WebSocket server for its tests
+
+roslibjs is the usual rosbridge client, but it is a bundled library with
+its own event emitter and conversion helpers, and the studio needs only the
+v2 JSON operations it uses, with every incoming message treated as
+untrusted (size before parsing, no evaluation, per-type checks and limits)
+and the bare `NaN` / `Infinity` tokens Python's json writes accepted.
+`src/core/ros/rosbridge.js` is written from the protocol document, takes the
+WebSocket constructor and timers as parameters and so runs unchanged in
+Node 22+ (global `WebSocket`) against the fake server. The fake server is
+also our own (RFC 6455 on `node:http`) because it must misbehave on
+purpose (malformed, oversized, binary frames, dropped connections) and the
+repository has no runtime or test dependencies besides the type checker
+and formatter. What would change this: a need for rosbridge's BSON / CBOR
+encodings or action support.
+
+## 20. The dead-man switch is a separate gate between teleop and /cmd_vel
+
+The simulation's teleop already produces a body twist; driving a real robot
+adds a state machine (`CmdVelGate`) that publishes nothing before an
+explicit, per-arming confirmation, re-sends the held command at 10 Hz (so a
+robot-side timeout can be short), sends a zero Twist three times on release,
+blur, stale input, hide or disconnect, disarms on hide and disconnect, and
+scales commands with the firmware's own saturation so no wheel exceeds the
+chosen fraction (at most 1) of the URDF's wheel limit. It is DOM-free and
+tested on a fake clock; the page only feeds it inputs and focus events. It
+cannot stop a robot over a lost connection, so the docs require a
+robot-side cmd_vel timeout.
+
+## 21. Bags: an MCAP writer here, reading through rosbag-inspect
+
+Writing a bag in the browser and in the CLI needs CDR, the message
+definitions and MCAP in JavaScript, so `src/core/ros` has a small writer
+for exactly the ten types used (uncompressed chunks with indexes, so
+rosbag2's MCAP plugin reads it like its own). Reading bags is
+rosbag-inspect's job: the Python companion uses it as a library pinned to a
+release tag instead of porting its SQLite3, MCAP, LZ4/zstd and CDR readers
+to JavaScript, and the one gap it had (finding 20: arrays dropped by
+`export`) was fixed there and released as v0.2.0. Correctness of the
+writer is checked by rosbag-inspect and by ROS 2 Humble's own `rosbag2_py`
+
+- `rclpy` deserializing every message in CI, not only by our tests.
+
+## 22. Replays and live robots feed a Track, and the 3D layer draws a ViewFrame
+
+`SimLayer` used to read the simulation directly. Replays and live robots
+have the same views but different sources, so every source now produces a
+`ViewFrame` (base pose, joints, scan and its pose, trails, grid, particles,
+frames) and `SimLayer.draw()` takes it. `Track` holds what replays and live
+robots share (estimators on incoming odometry and scans, plot histories);
+`SimSession.frame()` gives the same shape for the simulation. The bag clock
+starts at 1 s (a stamp of 0 means "not set" to ROS tools) and the importer
+subtracts the bag's start, so recordings keep starting at 0.

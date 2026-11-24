@@ -1,8 +1,9 @@
 # Handoff
 
-State of Robot Studio after milestone 3 (v0.3.0), for whoever builds
-milestone 4. Read [decisions.md](decisions.md) first, then
-[builder.md](builder.md) and [simulation.md](simulation.md).
+State of Robot Studio after milestone 4 (v0.4.0), for whoever builds
+milestone 5. Read [decisions.md](decisions.md) first, then
+[builder.md](builder.md), [simulation.md](simulation.md) and
+[ros2.md](ros2.md).
 
 ## Status
 
@@ -22,8 +23,15 @@ milestone 4. Read [decisions.md](decisions.md) first, then
   lidar-slam-lab, worlds with heights and an editor, live 3D layers, plots,
   HUD and teleop, a deterministic CLI recording. Status of each criterion in
   [ROADMAP.md](ROADMAP.md#milestone-3-simulation-v030-done).
+- Milestone 4 scope is implemented: rosbridge live view and `/cmd_vel`
+  behind a dead-man switch, ROS 2 bag (MCAP) export, `robot-studio-bag`
+  (Python, over rosbag-inspect v0.2.0) for bag import, replay through the
+  estimators, simulation-vs-recording comparison. Criterion 7 (hardware)
+  is not met. Status of each criterion in
+  [ROADMAP.md](ROADMAP.md#milestone-4-ros-2-v040-criteria-1-6-met-7-not-met).
 - Validation: software tests; simulation (model output, labelled
-  simulated); hardware none.
+  simulated, including bags, replays and comparisons made from it);
+  hardware none.
 - Vendored: urdf-inspector **v0.1.1**, lidar-slam-lab **v0.1.0** (commits in
   `vendor/manifest.json`), three.js **0.187.0**.
 
@@ -71,7 +79,20 @@ src/core/                      DOM-free, tested in Node, coverage-gated
   sim/routes.js                demo (autopilot), square, spin, none
   sim/settings.js              defaults, limits, normalizeSettings(), settingsDiff()
   sim/record.js                recording files and summary.json
-  sim/session.js               the page's real-time session: fixed steps, teleop, plot histories
+  sim/session.js               the page's real-time session: fixed steps, teleop, plot histories, frame()
+  ros/json.js                  JSON with rosbridge's bare NaN / Infinity tokens, depth and size limits
+  ros/url.js                   rosbridge address check (ws/wss only, mixed-content warning)
+  ros/msgs.js                  checks for incoming JointState, TFMessage, LaserScan, Imu, Odometry, String
+  ros/rosbridge.js             rosbridge v2 client: ops, fragments, reconnect, dropped-message counters
+  ros/live.js                  LiveSession: subscriptions, TF buffer, LiDAR mount, feeds a Track
+  ros/deadman.js               CmdVelGate (opt-in, rate, stop rules, speed limit), disarmOnDisconnect
+  ros/track.js                 Track (estimators + histories for replays and live robots), ViewFrame type
+  ros/msgdefs.js, cdr.js       Humble .msg definitions, ros2msg bundles, XCDR1 serializer
+  ros/mcap.js                  MCAP writer (chunks, indexes, summary, CRCs)
+  ros/bag.js                   recording -> bag messages (topic mapping) -> MCAP + metadata.yaml
+  ros/recording.js             recording files -> numbers (bounded, checked)
+  ros/replay.js                ReplaySession over a recording
+  ros/compare.js               command schedule, runSchedule(), compareRecordings()
 src/ui/                        browser only (not coverage-gated)
   app.js                       DOM wiring, panels, selection, URL updates, builder session
   builder.js                   template form and properties panel (DOM only)
@@ -80,12 +101,15 @@ src/ui/                        browser only (not coverage-gated)
   files.js                     drop / file input / folder input -> VirtualFs
   state.js                     URL <-> page state (DOM-free, tested)
   simui.js                     Simulate panel, HUD, plots, teleop, frame loop
-  simview.js                   the simulation in 3D: world, LiDAR, map, trails, particles, cloud, frames
+  simview.js                   the 3D layer: draws a ViewFrame (world, LiDAR, map, trails, particles, cloud, frames)
+  rosui.js                     ROS 2 panel: live robot, driving, replay, comparison
   plots.js                     canvas time plots
   worldedit.js                 top-down world editor
 src/node/nodefs.js             real-file-system XacroFs for the CLI and tests
 src/cli.js, bin/robot-studio.js  CLI
-src/simcli.js                  the `sim` command
+src/simcli.js                  the `sim` command (and --bag)
+src/roscli.js                  the `bag`, `replay` and `compare` commands
+python/                        robot-studio-bag: ROS 2 bag -> recording (uses rosbag-inspect v0.2.0)
 vendor/                        vendored code + manifest.json (never edit)
 examples/studio_mecanum/       our illustrative model (4 xacro files, STL + OBJ)
 examples/third_party/          TurtleBot3, urdf_tutorial, ros2_control_demos (unmodified, with licences)
@@ -95,7 +119,9 @@ tests/builder-cases.js         which template cases are exported there
 tests/corpus/sim/              simulator fixtures for CI cross-checks, golden digest, a test world
 scripts/                       vendor.mjs, xacro_golden.py, browser-smoke.mjs, serve.js, generators,
                                builder-fixtures.js, mecanum_interop.py, ros2_package_check.sh,
-                               sim-fixtures.js, firmware_interop.py, lsl-crosscheck.mjs
+                               sim-fixtures.js, firmware_interop.py, lsl-crosscheck.mjs,
+                               fake-rosbridge.mjs, rosbridge-fixtures.js, bag-fixtures.js,
+                               bag-roundtrip.mjs, check_scan_export.py, ros2_bag_check.sh, ros2_bag_verify.py
 ```
 
 ## How to run everything
@@ -135,6 +161,21 @@ PYTHONPATH=../encoder-odometry-firmware/host/src python scripts/firmware_interop
 node scripts/lsl-crosscheck.mjs --lsl ../lidar-slam-lab [--seeds 5] [--full-seeds 1]  # about 15 min locally
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --sim --sim-world lab --screenshot sim.png
 node scripts/browser-smoke.mjs ... --headed --gpu   # visible window with the GPU, for frame rates
+
+# ROS 2
+node bin/robot-studio.js sim mecanum --out run --bag bag    # or: node bin/robot-studio.js bag run -o bag
+node scripts/bag-fixtures.js [--check]        # python/tests/fixtures/sim_mecanum (bag + recording)
+node scripts/rosbridge-fixtures.js [--check]  # tests/fixtures/rosbridge (fake server messages)
+python -m venv ../.venv-rsbag && ../.venv-rsbag/Scripts/pip install -e "python[dev]"   # pulls rosbag-inspect v0.2.0
+../.venv-rsbag/Scripts/robot-studio-bag bag imported
+node scripts/bag-roundtrip.mjs --original run --imported imported
+node bin/robot-studio.js replay imported && node bin/robot-studio.js compare imported mecanum
+node scripts/fake-rosbridge.mjs --port 9090 --fixture tests/fixtures/rosbridge/sim_mecanum.jsonl \
+  --description tests/fixtures/rosbridge/robot_description.urdf --log rb.jsonl &
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --ros ws://127.0.0.1:9090 --ros-log rb.jsonl
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --replay rec.zip
+# ROS 2 Humble check (needs Docker; CI job ros2-bag):
+docker run --rm -v "$PWD/out:/data:ro" -v "$PWD/scripts:/scripts:ro" ros:humble-ros-base bash /scripts/ros2_bag_check.sh
 ```
 
 On this development machine: work only on D:, set
@@ -156,27 +197,48 @@ taken.
 - A world: add it to `WORLDS` in `src/core/sim/world.js` (the tests
   round-trip every bundled world).
 
-## Milestone 4 starting points
+## Milestone 5 starting points
 
-- The recording format and its topic mapping are in
-  [simulation.md](simulation.md#recording-format-and-the-ros-2-bag-mapping);
-  `src/core/sim/record.js` writes it. A bag importer should produce the same
-  streams so the estimators and views run on recorded data unchanged
-  (`estimators.js` takes an odometry delta, a scan and a mount).
-- `SimSession` (`src/core/sim/session.js`) is the shape a live session
-  should have too: something that advances, a snapshot for the view, plot
-  histories. `simview.js` draws from a session; a rosbridge session can
-  feed the same layer.
-- Teleop (`manual()` in `simui.js`) already produces a body twist with speed
-  limits from the robot's wheels: the input side of `/cmd_vel`. Add the
-  dead-man switch before sending anything to a real robot.
-- The firmware's telemetry fields are in the recording, so a bag from the
-  MentorPi (or odobridge's CSV) can be compared with a simulated run of the
-  same commands.
-- Headless browsers render with SwiftShader (10 to 14 fps); the browser job
-  checks simulated seconds and errors, not frame rate. On Windows the smoke
-  script ends every browser process started with its profile directory (Edge
-  hands over to a new process that a plain kill leaves running).
+- The ROADMAP's milestone 5: documentation pages with screenshots taken in
+  CI, an accessibility pass with an automated check, a performance budget,
+  and upstream fixes with the vendored pins moved.
+- Hardware (milestone 4, criterion 7) is still open and needs the owner:
+  the steps are in [ros2.md](ros2.md#for-the-robots-owner-mentorpi). When a
+  MentorPi bag exists, run it through `robot-studio-bag`, `replay` and
+  `compare` and record the result in the README's hardware row; do not
+  fill that row from simulated data.
+- The ROS 2 panel's elements (`#ros-url`, `#ros-connect`, `#ros-drive-confirm`,
+  `#ros-arm`, `#ros-replay-file`, `#ros-compare`) and `document.body.dataset`
+  values (`ros`, `rosScans`, `rosDrive`, `rosSent`, `replayT`, `replayDone`,
+  `compareRows`) are what the browser smoke scenarios use; keep them or
+  update `scripts/browser-smoke.mjs` with them.
+- Accessibility: the drive banner and the topic table are plain text; the
+  panel's controls are buttons and labelled inputs, but nothing has been
+  checked with a screen reader or an automated tool yet.
+- Upstream: rosbag-inspect v0.2.0 is pinned in `python/pyproject.toml`;
+  finding 54's per-topic Hz for MCAP is still open there.
+
+## How ROS 2 hangs together
+
+- Every source produces a `ViewFrame` (`ros/track.js`): `SimSession.frame()`
+  for the simulation, `Track.frame()` for replays (`ReplaySession`) and live
+  robots (`LiveSession`). `SimLayer.draw(frame, robot)` draws any of them;
+  `simui.js` and `rosui.js` each run their own frame loop and only one is
+  active (opening one closes the other).
+- Replays track the recording's base frame (the simulation tracks the wheel
+  centroid); see the MCL note in [ros2.md](ros2.md#limitations).
+- The bag clock is recording time + 1 s (`BAG_CLOCK_OFFSET`); the importer
+  subtracts the bag's start, so recordings start at 0 again.
+- `robot-studio-bag` never parses storage formats; anything a bag reader
+  lacks belongs in rosbag-inspect (fix there, release, move the pin).
+- The dead-man gate is the only path to `/cmd_vel`; the page never
+  publishes anything else.
+- `tests/rosbridge.test.js` runs real WebSocket connections on 127.0.0.1;
+  under heavy parallel load the waits allow 15 s. One check of a rejected
+  message is handed to the client directly because the same message sent
+  over the socket was not seen on two Linux CI runs while it passed locally
+  and on Windows (the cause was not found; the network path of bad messages
+  is covered by the next test).
 
 ## How the simulation hangs together
 
@@ -196,6 +258,10 @@ taken.
   `scripts/firmware_interop.py` and `scripts/mecanum_interop.py`.
 
 ## Known issues
+
+- ROS 2: see [ros2.md](ros2.md#limitations) (no hardware validation, fixed
+  topic names, one LiDAR, no MCL or robot `map` frame in the live view, the
+  https site cannot reach `ws://` on another machine).
 
 - Simulation: see [simulation.md](simulation.md#limitations) (2D motion only,
   one LiDAR, lidar-slam-lab's MCL motion model has no heading bias and reads

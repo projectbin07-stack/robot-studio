@@ -137,45 +137,61 @@ Not done (moved on): a TF tree panel separate from the kinematic tree;
 more than one LiDAR; noise and recording for the depth camera; an
 omnidirectional motion model for MCL (upstream request).
 
-## Milestone 4: ROS 2
+## Milestone 4: ROS 2 (v0.4.0, criteria 1-6 met; 7 not met)
 
 Connect to a real robot or replay a recorded one, with the same views the
 simulation has. Milestone 3's recording format is the bridge: a bag
-becomes the same streams, and a simulated run becomes a bag.
+becomes the same streams, and a simulated run becomes a bag. Details in
+[ros2.md](ros2.md). Validation: software tests and simulation; hardware
+none.
 
-Acceptance criteria:
+Acceptance criteria and where they stand:
 
-1. **rosbridge live view**: a rosbridge v2 client (JSON over WebSocket)
-   written from the protocol specification; subscribe `/joint_states`,
-   `/tf`, `/tf_static`, `/scan`, `/imu`, `/odom`; read `robot_description`
-   from the parameter or topic; show them with the simulation's 3D layers,
-   plots and HUD (labelled live, not simulated).
-2. **cmd_vel**: publish `geometry_msgs/Twist` on `/cmd_vel` from the same
-   keyboard, gamepad and touch teleop, with a dead-man switch (commands stop
-   when the key, stick or page focus is released), a speed limit no higher
-   than the robot's wheel limit, and a visible "driving a real robot" state.
-3. **Tested against a fake rosbridge server** in CI (recorded message
-   fixtures), including reconnects, malformed messages and the dead-man
-   switch.
-4. **Bag export**: write a simulated run as a ROS 2 bag (MCAP) with the
-   topic mapping in [simulation.md](simulation.md#recording-format-and-the-ros-2-bag-mapping),
-   checked by reading it back with rosbag-inspect and with `ros2 bag info`
-   in `ros:humble-ros-base` in CI.
-5. **Bag import**: a small Python companion using rosbag-inspect converts a
-   ROS 2 bag into the recording format, and the studio replays it through
-   the same estimators and views. This closes the rosbag-inspect →
-   LiDAR adapter gap from the ecosystem audit (findings #20 and #27:
-   rosbag-inspect's `export` drops LaserScan arrays and writes inf as text;
-   lidar-slam-lab takes no scan input and no mount pose): the adapter keeps
-   the arrays and turns inf, NaN and out-of-range values into "no return".
-   Test on a bag fixture.
-6. **Simulation vs robot**: the same command schedule on the simulator and
-   (from a bag) on the robot, compared through the firmware's telemetry
-   fields the simulator already writes.
-7. **Hardware tier**: the owner's MentorPi (ROS 2 Humble, mecanum, LiDAR,
-   IMU, depth camera, encoders) connected once over rosbridge, or a bag
-   recorded from it, with the date, commit and what was observed recorded in
-   the README. Until that happens the hardware tier stays empty.
+1. **Met (software tests; no robot yet).** A rosbridge v2 client written
+   from the protocol specification (`src/core/ros/rosbridge.js`): subscribe
+   / unsubscribe, advertise / unadvertise, publish, call_service, status,
+   fragments, reconnect with backoff; every incoming message size-checked,
+   parsed without evaluation and type-checked. The live session subscribes
+   `/joint_states`, `/tf`, `/tf_static`, `/scan`, `/imu`, `/odom` and reads
+   `robot_description` from its topic or from rosapi's parameter call, and
+   shows them with the simulation's 3D layers, plots and HUD under a LIVE
+   badge (never "simulated"). Tested against the fake server and in the
+   browser job.
+2. **Met (software tests; no robot yet).** `geometry_msgs/msg/Twist` on
+   `/cmd_vel` from the same keyboard, gamepad and touch teleop through a
+   dead-man gate: explicit per-arming opt-in, 10 Hz while held, zero at once
+   on release, blur, a 250 ms stale input, hiding (disarms) and disconnects
+   (disarms); scaled to at most the chosen fraction (10 to 100 %) of the
+   URDF wheel limit; "DRIVING A REAL ROBOT" banner.
+3. **Met.** Tested against an in-repo fake rosbridge server (RFC 6455 on
+   `node:http`) replaying message fixtures generated from a simulated run
+   (rosbridge's JSON form, including bare `Infinity`), in every Node CI job
+   and in the browser job: subscribe / advertise / publish, reconnects,
+   malformed, oversized, binary and unknown messages, fragments, dead-man
+   timing on a fake clock and over a real connection.
+4. **Met.** A simulated run written as a ROS 2 bag (MCAP, CDR, Humble
+   definitions) with the documented mapping; read back in CI by
+   rosbag-inspect v0.2.0 (`info`, `check` passing, `export --arrays` with
+   every beam compared) and by `ros2 bag info` in `ros:humble-ros-base` with
+   `ros-humble-rosbag2-storage-mcap`, where every message is also
+   deserialized by `rosbag2_py` + `rclpy` and compared with the recording.
+5. **Met.** `robot-studio-bag` (Python, typed, ruff / mypy / pytest on
+   Ubuntu and Windows, 3.10 and 3.13) uses rosbag-inspect as a library
+   pinned to **v0.2.0**, which fixed finding 20 there (`export --arrays`,
+   `echo --nonfinite null`, optional zstd). LaserScan arrays kept, inf /
+   NaN / out-of-range → no return, LiDAR mount from `/tf_static` (finding
+   27's mount pose on the studio side). Tested on Robot Studio's MCAP and a
+   robot-like SQLite3 bag; the round trip sim → MCAP → import → replay
+   keeps every value and gives identical estimator results (CI job
+   `bag-roundtrip`).
+6. **Met, demonstrated with simulated data only.** `robot-studio compare`
+   and the panel's comparison run a recording's `/cmd_vel` schedule on the
+   simulator and compare ODOMETRY and WHEEL_STATE fields; shown on a bag
+   produced by the simulator and labelled so. No robot bag exists yet.
+7. **Not met.** Hardware tier: the owner's MentorPi has not been connected
+   and no bag from it has been read. The steps are in
+   [ros2.md](ros2.md#for-the-robots-owner-mentorpi); the README's hardware
+   row stays empty until they are done.
 
 ## Milestone 5: Release polish
 
