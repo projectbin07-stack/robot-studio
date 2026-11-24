@@ -6,7 +6,7 @@
     <title>Robot Studio</title>
     <meta
       name="description"
-      content="Open any robot model in the browser: URDF or xacro, a whole description package or a zip. xacro is expanded in the page, the model is checked, and shown in 3D with meshes and joint sliders. Nothing is uploaded."
+      content="Open or build a robot model in the browser: URDF or xacro, a whole description package or a zip, or a mecanum, differential or arm template. xacro is expanded in the page, the model is checked and shown in 3D, and exported as URDF, xacro, a mecanum-kinematics config or a ROS 2 package. Nothing is uploaded."
     />
     <meta name="color-scheme" content="light dark" />
     <link rel="stylesheet" href="styles.css" />
@@ -29,8 +29,8 @@
       <div class="brand">
         <h1>Robot Studio</h1>
         <p class="tagline">
-          Open any robot model: URDF or xacro, a description package or a zip. Expanded, checked and
-          shown in 3D in this browser; nothing is uploaded.
+          Open any robot model (URDF, xacro, a description package or a zip) or build one from a
+          template; checked and shown in 3D in this browser. Nothing is uploaded.
         </p>
       </div>
       <nav>
@@ -80,6 +80,34 @@
             <p class="summary" id="summary"></p>
           </div>
         </details>
+        <details class="panel" id="p-build" open>
+          <summary>Build</summary>
+          <div class="panel-body">
+            <label class="field"
+              ><span>Robot template</span>
+              <select id="template"></select>
+            </label>
+            <p class="note" id="template-note"></p>
+            <form id="template-form">
+              <div id="template-fields"></div>
+              <p class="note" id="template-error" role="alert"></p>
+              <div class="row">
+                <button type="submit" id="btn-create">Create from template</button>
+                <button type="button" id="btn-edit-model">Edit the open model</button>
+              </div>
+            </form>
+            <p class="note" id="template-live" hidden>
+              Changing a parameter regenerates the robot (undo with Ctrl+Z); manual edits made since
+              are replaced.
+            </p>
+            <div class="row">
+              <button type="button" id="btn-restore" hidden>Restore autosaved robot</button>
+            </div>
+            <p class="note">
+              Edits are autosaved in this browser only (local storage); nothing is uploaded.
+            </p>
+          </div>
+        </details>
         <details class="panel" id="p-tree" open>
           <summary>Kinematic tree</summary>
           <div class="panel-body tree" id="tree"></div>
@@ -88,6 +116,28 @@
 
       <section class="viewport" aria-label="3D view">
         <div id="view"></div>
+        <div class="toolbar edit-bar" id="edit-bar" role="toolbar" aria-label="Edit" hidden>
+          <button type="button" id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button type="button" id="btn-redo" title="Redo (Ctrl+Y, Ctrl+Shift+Z)">Redo</button>
+          <button type="button" id="btn-add-child" title="Add a child link to the selected link">
+            Add child
+          </button>
+          <button
+            type="button"
+            id="btn-duplicate"
+            title="Duplicate the selected link and its children"
+          >
+            Duplicate
+          </button>
+          <button
+            type="button"
+            id="btn-delete"
+            title="Delete the selected link and its children (Delete)"
+          >
+            Delete
+          </button>
+          <span class="edit-status" id="edit-status" role="status"></span>
+        </div>
         <div class="toolbar" role="toolbar" aria-label="View options">
           <div class="seg" role="group" aria-label="Geometry">
             <button type="button" data-geometry="visual">Visual</button>
@@ -108,7 +158,7 @@
 
       <aside class="side right">
         <details class="panel" id="p-details" open>
-          <summary>Details</summary>
+          <summary id="details-title">Details</summary>
           <div class="panel-body" id="details">
             <p class="muted">Click a part or a tree entry.</p>
           </div>
@@ -121,6 +171,31 @@
           <summary>Findings <span class="count" id="finding-count"></span></summary>
           <ul class="panel-body findings" id="findings"></ul>
         </details>
+        <details class="panel" id="p-export" open hidden>
+          <summary>Export</summary>
+          <div class="panel-body">
+            <div class="row">
+              <button type="button" id="btn-export-urdf">URDF</button>
+              <button type="button" id="btn-export-xacro">xacro</button>
+              <button type="button" id="btn-export-toml">mecanum-kinematics TOML</button>
+            </div>
+            <label class="field"
+              ><span>ROS 2 package name</span>
+              <input type="text" id="package-name" spellcheck="false" />
+            </label>
+            <div class="row">
+              <button type="button" id="btn-export-package">
+                ROS 2 description package (.zip)
+              </button>
+            </div>
+            <p class="note" id="export-note" role="status"></p>
+            <p class="note">
+              The package (package.xml, CMakeLists.txt, urdf/, launch/display.launch.py with
+              robot_state_publisher, joint_state_publisher_gui and RViz) is built with colcon in CI
+              for the templates; check yours before relying on it.
+            </p>
+          </div>
+        </details>
         <details class="panel" id="p-urdf">
           <summary>Expanded URDF</summary>
           <div class="panel-body">
@@ -131,8 +206,9 @@
       </aside>
     </main>
     <footer class="foot">
-      Robot Studio 0.1 · Validation: software tests only (xacro output compared with the official
-      xacro in CI); no simulation or hardware results yet ·
+      Robot Studio 0.2 · Validation: software tests only (xacro output compared with the official
+      xacro, builder exports with the official xacro and mecanum-kinematics in CI); no simulation or
+      hardware results yet ·
       <a href="https://github.com/projectbin07-stack/robot-studio#validation-status">details</a>
     </footer>
   </body>

@@ -52,6 +52,8 @@ test("URL state round-trips and rejects junk", () => {
   files.q = { a: 1 };
   files.args = { x: "1" };
   assert.equal(encodeState(files), "s=files", "local models keep no joint values or args in links");
+  assert.equal(decodeState("s=builder").source, "builder");
+  assert.equal(encodeState({ ...files, source: "builder" }), "s=builder");
   assert.equal(decodeState("s=files").source, "files");
   const junk = decodeState(
     "s=evil&sel=x:y&g=wire&q=a:NaN,:1,b:1e9,ok:2&a=bad name:1,x:<script>,y:fine&theme=pink&fr=2",

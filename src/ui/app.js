@@ -11,6 +11,24 @@ import { decodeState, encodeState } from "./state.js";
 import { fsFromDrop, fsFromFileList } from "./files.js";
 import { RobotView } from "./view3d.js";
 import { VERSION } from "../core/version.js";
+import { Editor } from "../core/builder/editor.js";
+import { EditError } from "../core/builder/ops.js";
+import { importUrdf, toUrdf } from "../core/builder/urdf.js";
+import {
+  TEMPLATES,
+  TemplateError,
+  defaultParams,
+  findTemplate,
+  generate,
+  validateParams,
+} from "../core/builder/templates.js";
+import { PACKAGE_NAME_RE, exportXacro, packageZip } from "../core/builder/export.js";
+import { mecanumConfig } from "../core/builder/drive.js";
+import { AUTOSAVE_KEY, decodeAutosave, encodeAutosave } from "../core/builder/storage.js";
+import { addChild, addSensor, collisionFromVisual } from "../core/builder/actions.js";
+import { rootLinks } from "../core/builder/document.js";
+import { VirtualFs as EmptyFs } from "../core/vfs.js";
+import { renderProperties, renderTemplateForm } from "./builder.js";
 
 /** @typedef {import("../core/model.js").LoadedModel} LoadedModel */
 /** @typedef {import("../core/vfs.js").VirtualFs} VirtualFs */
@@ -48,6 +66,13 @@ let entry = "";
 /** @type {StudioFinding[]} */
 let meshProblems = [];
 let sourceLabel = "";
+/** The builder session, null while only viewing a model. @type {Editor | null} */
+let editor = null;
+/** Files an imported model came from (for its meshes), null for template robots. @type {VirtualFs | null} */
+let editMeshFs = null;
+const NO_FILES = new EmptyFs();
+/** The file system the 3D view reads meshes from. */
+const viewFs = () => (editor ? (editMeshFs ?? NO_FILES) : /** @type {VirtualFs} */ (fs));
 
 const view = new RobotView($("view"), (link) => select(link ? { kind: "link", name: link } : null));
 
@@ -197,10 +222,7 @@ for (const [id, key] of /** @type {const} */ ([
     syncOptions();
   });
 $("btn-fit").addEventListener("click", () => {
-  if (model)
-    void view
-      .show(model, /** @type {VirtualFs} */ (fs), state.q)
-      .then(() => select(state.selected));
+  if (model) void view.show(model, viewFs(), state.q).then(() => select(state.selected));
 });
 function syncOptions() {
   for (const b of document.querySelectorAll("[data-geometry]"))
@@ -270,6 +292,9 @@ async function openExample(id) {
 
 function openModel() {
   if (!fs) return;
+  editor = null;
+  editMeshFs = null;
+  updateEditUi();
   const thisFs = fs;
   document.body.dataset.state = "loading";
   setStatus(`expanding ${entry}`);
@@ -284,15 +309,7 @@ function openModel() {
   $("urdf").textContent = m.urdf || "(no output: xacro failed, see Findings)";
   void view.show(m, thisFs, state.q).then((reports) => {
     if (model !== m) return;
-    meshProblems = reports.map((r) => ({
-      id: r.severity === "info" ? "mesh-texture-missing" : "mesh-unreadable",
-      severity: r.severity ?? "warning",
-      message: `mesh '${r.filename}' of link '${r.link}': ${r.message}`,
-      path: `/robot/link[@name='${r.link}']`,
-      target: { kind: /** @type {const} */ ("link"), name: r.link },
-      line: 0,
-      file: entry,
-    }));
+    meshProblems = meshFindings(reports, entry);
     renderFindings();
     renderSummary();
     syncOptions();
@@ -301,6 +318,24 @@ function openModel() {
     document.body.dataset.state = m.error ? "error" : "ready";
     document.body.dataset.links = String(m.report?.summary.links ?? 0);
   });
+}
+
+/**
+ * Findings for meshes the view could not draw.
+ * @param {import("./view3d.js").MeshReport[]} reports
+ * @param {string} file
+ * @returns {StudioFinding[]}
+ */
+function meshFindings(reports, file) {
+  return reports.map((r) => ({
+    id: r.severity === "info" ? "mesh-texture-missing" : "mesh-unreadable",
+    severity: r.severity ?? "warning",
+    message: `mesh '${r.filename}' of link '${r.link}': ${r.message}`,
+    path: `/robot/link[@name='${r.link}']`,
+    target: { kind: /** @type {const} */ ("link"), name: r.link },
+    line: 0,
+    file,
+  }));
 }
 
 function allFindings() {
@@ -541,6 +576,21 @@ function select(sel) {
 /** @param {{ kind: "link" | "joint", name: string } | null} sel */
 function renderDetails(sel) {
   const host = $("details");
+  if (editor) {
+    renderProperties(host, editor.doc, sel, {
+      apply: edit,
+      addChild: (link) => runAction(() => addChild(editor_().doc, link), "add child"),
+      addSensor: (link, kind) =>
+        runAction(() => addSensor(editor_().doc, kind, link), `add ${kind.replace("_", " ")}`),
+      collisionFromVisual: (link) =>
+        runAction(
+          () => ({ doc: collisionFromVisual(editor_().doc, link), link }),
+          "collision from visual",
+        ),
+      meshBounds: (link, kind, index) => view.meshBounds.get(`${link}|${kind}|${index}`),
+    });
+    return;
+  }
   const tree = model?.report?.context?.tree;
   if (!sel || !tree || !model) {
     host.replaceChildren(h("p", { class: "muted" }, ["Click a part or a tree entry."]));
@@ -642,6 +692,362 @@ function renderDetails(sel) {
   );
 }
 
+// ---------------------------------------------------------------- builder
+
+const editor_ = () => /** @type {Editor} */ (editor);
+const templateSel = /** @type {HTMLSelectElement} */ ($("template"));
+for (const t of TEMPLATES) templateSel.append(h("option", { value: t.id }, [t.title]));
+/** Parameters typed into the form for templates not being edited live. @type {Record<string, Record<string, any>>} */
+const formParams = {};
+let renderedForm = "";
+
+/** @param {unknown} v */
+const fmtValue = (v) => (Array.isArray(v) ? v.join(" ") : String(v));
+
+/** @param {string} text */
+function flash(text) {
+  $("edit-status").textContent = text;
+  setStatus(text);
+}
+
+/** The template form: live (regenerating the robot) while editing that template's robot. */
+function renderTemplateUi(force = false) {
+  const t = findTemplate(templateSel.value);
+  const live = editor?.doc.template?.id === t.id;
+  const params = live
+    ? /** @type {Record<string, any>} */ (editor_().doc.template?.params)
+    : (formParams[t.id] ??= defaultParams(t.id));
+  const key = JSON.stringify([t.id, live, params]);
+  $("template-note").textContent = t.description;
+  $("template-live").hidden = !live;
+  if (!force && key === renderedForm) return;
+  renderedForm = key;
+  renderTemplateForm($("template-fields"), t, params, (k, value) => {
+    const next = { ...params, [k]: value };
+    try {
+      if (live) {
+        const doc = generate(t.id, next);
+        $("template-error").textContent = "";
+        edit({ type: "replaceDocument", doc, label: `${k} = ${fmtValue(value)}` });
+      } else {
+        validateParams(t.id, next);
+        formParams[t.id] = next;
+        $("template-error").textContent = "";
+      }
+    } catch (e) {
+      if (!(e instanceof TemplateError)) throw e;
+      $("template-error").textContent = e.message;
+      renderTemplateUi(true);
+    }
+  });
+}
+templateSel.addEventListener("change", () => {
+  $("template-error").textContent = "";
+  renderTemplateUi();
+});
+
+$("template-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const t = findTemplate(templateSel.value);
+  const live = editor?.doc.template?.id === t.id;
+  let doc;
+  try {
+    doc = generate(t.id, live ? editor_().doc.template?.params : (formParams[t.id] ?? {}));
+  } catch (err) {
+    if (!(err instanceof TemplateError)) throw err;
+    $("template-error").textContent = err.message;
+    return;
+  }
+  state.selected = null;
+  if (editor && !editMeshFs) edit({ type: "replaceDocument", doc, label: `new ${t.id}` }, true);
+  else startEditing(doc, null, `new robot from the ${t.id} template`);
+});
+
+$("btn-edit-model").addEventListener("click", () => {
+  if (!model?.urdf || !fs) return;
+  const imp = importUrdf(model.urdf, { entry: model.entry });
+  if (!imp.doc) {
+    setStatus(`cannot edit this model: ${imp.notes.join("; ")}`);
+    return;
+  }
+  startEditing(
+    imp.doc,
+    fs,
+    `editing ${sourceLabel}${model.xacro ? " (the expanded URDF: xacro structure is not kept)" : ""}${imp.notes.length ? `; ${imp.notes.join("; ")}` : ""}`,
+  );
+});
+
+/**
+ * Start a new builder session (fresh history).
+ * @param {import("../core/builder/document.js").RobotDoc} doc
+ * @param {VirtualFs | null} meshFs
+ * @param {string} message
+ */
+function startEditing(doc, meshFs, message) {
+  editor = new Editor(doc, meshFs);
+  editMeshFs = meshFs;
+  state.source = "builder";
+  state.q = {};
+  state.args = {};
+  exampleSel.value = "";
+  $("example-note").textContent = "";
+  $("attribution").textContent = "";
+  $("entry-field").hidden = true;
+  sourceLabel = "builder";
+  flash(message);
+  void showEditor(true);
+}
+
+/**
+ * Apply an edit; on a rejected edit nothing changes and the reason is shown.
+ * @param {import("../core/builder/ops.js").EditOp} op
+ * @param {boolean} [frame] re-frame the camera afterwards
+ */
+function edit(op, frame = false) {
+  if (!editor) return;
+  const t0 = performance.now();
+  try {
+    editor.apply(op);
+  } catch (e) {
+    if (!(e instanceof EditError || e instanceof RangeError || e instanceof TemplateError)) throw e;
+    flash(e.message);
+    renderDetails(state.selected);
+    return;
+  }
+  const sel = state.selected;
+  if (sel && (op.type === "renameLink" || op.type === "renameJoint") && sel.name === op.from)
+    state.selected = { kind: sel.kind, name: op.to };
+  $("edit-status").textContent = `${editor.undoLabel ?? ""}`;
+  void showEditor(frame, t0);
+}
+
+/**
+ * A multi-operation action as one undoable step; selects the new link.
+ * @param {() => { doc: import("../core/builder/document.js").RobotDoc, link: string }} make
+ * @param {string} label
+ */
+function runAction(make, label) {
+  try {
+    const r = make();
+    state.selected = { kind: "link", name: r.link };
+    edit({ type: "replaceDocument", doc: r.doc, label });
+  } catch (e) {
+    if (!(e instanceof EditError || e instanceof RangeError)) throw e;
+    flash(e.message);
+  }
+}
+
+function undo() {
+  if (editor?.undo()) {
+    $("edit-status").textContent = `undone: ${editor.redoLabel}`;
+    void showEditor(false);
+  }
+}
+function redo() {
+  if (editor?.redo()) {
+    $("edit-status").textContent = `redone: ${editor.undoLabel}`;
+    void showEditor(false);
+  }
+}
+
+/** The link the toolbar acts on: the selected link, or the child of the selected joint. */
+function selectedLink() {
+  const sel = state.selected;
+  if (!editor || !sel) return null;
+  if (sel.kind === "link") return sel.name;
+  return editor.doc.joints.find((j) => j.name === sel.name)?.child ?? null;
+}
+
+$("btn-undo").addEventListener("click", undo);
+$("btn-redo").addEventListener("click", redo);
+$("btn-add-child").addEventListener("click", () => {
+  if (!editor) return;
+  const parent = selectedLink() ?? rootLinks(editor.doc)[0];
+  if (parent) runAction(() => addChild(editor_().doc, parent), "add child");
+});
+$("btn-duplicate").addEventListener("click", () => {
+  const l = selectedLink();
+  if (l) edit({ type: "duplicateLink", name: l });
+});
+function deleteSelected() {
+  const l = selectedLink();
+  if (!l) return;
+  edit({ type: "removeLink", name: l });
+}
+$("btn-delete").addEventListener("click", deleteSelected);
+
+window.addEventListener("keydown", (e) => {
+  if (!editor) return;
+  const t = /** @type {HTMLElement | null} */ (e.target);
+  if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key.toLowerCase();
+  if (mod && k === "z" && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+  } else if (mod && (k === "y" || (k === "z" && e.shiftKey))) {
+    e.preventDefault();
+    redo();
+  } else if (!mod && (e.key === "Delete" || e.key === "Backspace")) {
+    e.preventDefault();
+    deleteSelected();
+  }
+});
+
+/**
+ * Show the editor's current model.
+ * @param {boolean} frame re-frame the camera (new robot)
+ * @param {number} [t0] when the edit started, for the timing shown to tests
+ */
+async function showEditor(frame, t0 = performance.now()) {
+  if (!editor) return;
+  const m = editor.model;
+  model = m;
+  meshProblems = [];
+  document.body.dataset.state = "loading";
+  renderArgs(m);
+  renderTree(m);
+  renderJoints(m);
+  renderFindings();
+  renderSummary();
+  $("urdf").textContent = m.urdf;
+  updateEditUi();
+  autosave();
+  const reports = await view.show(m, viewFs(), state.q, { keepCamera: !frame });
+  if (model !== m) return;
+  meshProblems = meshFindings(reports, m.entry);
+  renderFindings();
+  renderSummary();
+  syncOptions();
+  select(state.selected);
+  document.body.dataset.state = "ready";
+  document.body.dataset.links = String(m.report?.summary.links ?? 0);
+  document.body.dataset.editMs = (performance.now() - t0).toFixed(1);
+  document.body.dataset.version = String(editor.version);
+}
+
+let packageNameEdited = false;
+$("package-name").addEventListener("input", () => (packageNameEdited = true));
+
+function updateEditUi() {
+  const on = editor !== null;
+  document.body.classList.toggle("editing", on);
+  $("edit-bar").hidden = !on;
+  $("p-export").hidden = !on;
+  $("btn-edit-model").hidden = on;
+  $("details-title").textContent = on ? "Properties" : "Details";
+  $("btn-restore").hidden = on || readAutosave() === null;
+  if (!on) {
+    const saved = readAutosave();
+    if (saved) $("btn-restore").textContent = `Restore autosaved robot '${saved.doc.name}'`;
+    renderTemplateUi();
+    return;
+  }
+  const ed = editor_();
+  const undoBtn = /** @type {HTMLButtonElement} */ ($("btn-undo"));
+  const redoBtn = /** @type {HTMLButtonElement} */ ($("btn-redo"));
+  undoBtn.disabled = !ed.canUndo;
+  redoBtn.disabled = !ed.canRedo;
+  undoBtn.title = ed.undoLabel ? `Undo ${ed.undoLabel} (Ctrl+Z)` : "Nothing to undo";
+  redoBtn.title = ed.redoLabel ? `Redo ${ed.redoLabel} (Ctrl+Y)` : "Nothing to redo";
+  const toml = mecanumConfig(ed.model);
+  const tomlBtn = /** @type {HTMLButtonElement} */ ($("btn-export-toml"));
+  tomlBtn.disabled = !toml.ok;
+  tomlBtn.title = toml.ok ? "mecanum-kinematics config measured from the wheels" : toml.reason;
+  const x = exportXacro(ed.doc);
+  $("btn-export-xacro").title = x.parametrised
+    ? "Parametrised xacro (template parameters as properties and arguments)"
+    : "Not parametrised: the robot is not exactly a template's output";
+  const pkg = /** @type {HTMLInputElement} */ ($("package-name"));
+  if (!packageNameEdited)
+    pkg.value = `${
+      ed.doc.name
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, "_")
+        .replace(/^[^a-z]+/, "") || "robot"
+    }_description`;
+  if (ed.doc.template && templateSel.value !== ed.doc.template.id)
+    templateSel.value = ed.doc.template.id;
+  renderTemplateUi();
+}
+
+// ---------------------------------------------------------------- exports
+
+/**
+ * @param {string} name
+ * @param {string | Uint8Array} data
+ * @param {string} type
+ */
+function download(name, data, type) {
+  const url = URL.createObjectURL(new Blob([/** @type {BlobPart} */ (data)], { type }));
+  const a = h("a", { href: url, download: name });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  const size = typeof data === "string" ? new TextEncoder().encode(data).length : data.length;
+  $("export-note").textContent = `Exported ${name} (${size} bytes).`;
+  document.body.dataset.lastExport = name;
+}
+$("btn-export-urdf").addEventListener("click", () => {
+  if (editor) download(`${editor.doc.name}.urdf`, toUrdf(editor.doc), "application/xml");
+});
+$("btn-export-xacro").addEventListener("click", () => {
+  if (!editor) return;
+  const x = exportXacro(editor.doc);
+  download(`${editor.doc.name}.urdf.xacro`, x.text, "application/xml");
+  if (!x.parametrised)
+    $("export-note").textContent +=
+      " Not parametrised: the robot is not exactly a template's output.";
+});
+$("btn-export-toml").addEventListener("click", () => {
+  if (!editor) return;
+  const t = mecanumConfig(editor.model);
+  if (t.ok) download(`${editor.doc.name}.toml`, t.toml, "application/toml");
+  else $("export-note").textContent = t.reason;
+});
+$("btn-export-package").addEventListener("click", async () => {
+  if (!editor) return;
+  const name = /** @type {HTMLInputElement} */ ($("package-name")).value.trim();
+  if (!PACKAGE_NAME_RE.test(name)) {
+    $("export-note").textContent =
+      `'${name}' is not a ROS package name (lower case letters, digits and _, starting with a letter).`;
+    return;
+  }
+  const p = await packageZip(editor.doc, { packageName: name, meshFs: editMeshFs });
+  download(`${p.name}.zip`, p.zip, "application/zip");
+  if (p.notes.length) $("export-note").textContent += ` ${p.notes.join(" ")}`;
+});
+
+// ---------------------------------------------------------------- autosave (this browser only)
+
+function autosave() {
+  if (!editor) return;
+  try {
+    localStorage.setItem(AUTOSAVE_KEY, encodeAutosave(editor.doc));
+  } catch {
+    // Storage may be full, disabled or blocked; editing works without it.
+  }
+}
+
+function readAutosave() {
+  try {
+    return decodeAutosave(localStorage.getItem(AUTOSAVE_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function restoreAutosave() {
+  const saved = readAutosave();
+  if (!saved) return false;
+  startEditing(
+    saved.doc,
+    null,
+    `restored '${saved.doc.name}' autosaved in this browser at ${new Date(saved.savedAt).toLocaleString()}${saved.doc.source ? " (mesh files are not stored; open the package again to see them)" : ""}`,
+  );
+  return true;
+}
+$("btn-restore").addEventListener("click", restoreAutosave);
+
 // ---------------------------------------------------------------- start
 document.title = `Robot Studio ${VERSION}`;
 applyTheme();
@@ -652,4 +1058,10 @@ if (state.source === "files") {
   );
   document.body.dataset.state = "ready";
   document.body.dataset.links = "0";
+} else if (state.source === "builder") {
+  if (!restoreAutosave()) {
+    state.source = "mecanum";
+    void openExample(state.source);
+  }
 } else void openExample(state.source);
+updateEditUi();

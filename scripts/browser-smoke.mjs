@@ -6,6 +6,11 @@
 //
 //   node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --expect-links 11 \
 //     [--browser path] [--screenshot out.png] [--width 1440] [--height 900] [--mobile]
+//     [--builder]           create a mecanum robot from the template through the UI,
+//                           edit a parameter, undo it with Ctrl+Z, export URDF and the
+//                           ROS 2 package, reload and check the autosave is restored
+//     [--template id]       create a robot from that template through the UI
+//     [--select-link name]  click a link in the tree before the screenshot
 //
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
@@ -28,6 +33,9 @@ const { values } = parseArgs({
     "expect-summary": { type: "string" },
     "user-data-dir": { type: "string" },
     upload: { type: "string" },
+    builder: { type: "boolean", default: false },
+    "select-link": { type: "string" },
+    template: { type: "string" },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -175,6 +183,29 @@ try {
     if (st === "ready" || st === "error") break;
     await sleep(250);
   }
+  /** @type {Record<string, unknown>} */
+  const builder = {};
+  /** @type {string[]} */
+  const builderProblems = [];
+  if (values.builder && st === "ready") {
+    await runBuilder(s, evaluate, builder, builderProblems, profile, deadline);
+  }
+  if (values.template && st === "ready") {
+    const before = await evaluate("Number(document.body.dataset.version || 0)");
+    await evaluate(
+      `(() => { const t = document.getElementById('template'); t.value = ${JSON.stringify(values.template)}; t.dispatchEvent(new Event('change')); })()`,
+    );
+    await clickSelector(s, evaluate, "#btn-create");
+    while (Date.now() < deadline) {
+      const v = await evaluate("Number(document.body.dataset.version || 0)");
+      if (v !== before && (await evaluate("document.body.dataset.state")) === "ready") break;
+      await sleep(100);
+    }
+  }
+  if (values["select-link"]) {
+    await clickSelector(s, evaluate, `#tree .t-link[data-link="${values["select-link"]}"]`);
+    await sleep(300);
+  }
   await sleep(800); // let the last frame (textures, shadows) render
   const report = await evaluate(`(() => {
     const c = document.querySelector('#view canvas');
@@ -201,6 +232,7 @@ try {
     };
   })()`);
   report.consoleErrors = errors;
+  if (values.builder) report.builder = builder;
   if (values.screenshot) {
     const shot = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     writeFileSync(values.screenshot, Buffer.from(shot.data, "base64"));
@@ -218,6 +250,7 @@ try {
   if (report.webglColours < 12)
     problems.push(`the 3D view looks blank (${report.webglColours} colours)`);
   if (errors.length > 0) problems.push(`${errors.length} console error(s)`);
+  problems.push(...builderProblems);
   for (const p of problems) console.error(`FAIL: ${p}`);
   exitCode = problems.length === 0 ? 0 : 1;
   ws.close();
@@ -232,4 +265,170 @@ try {
     // the browser may still hold files on Windows; the folder is in TMP
   }
   process.exit(exitCode);
+}
+
+/**
+ * Click the centre of the element matching a selector with real mouse events.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {string} selector
+ */
+async function clickSelector(s, evaluate, selector) {
+  const r = await evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    if (!el) return null;
+    el.scrollIntoView({ block: "center" });
+    const b = el.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  })()`);
+  if (!r) throw new Error(`nothing matches ${selector}`);
+  for (const type of ["mousePressed", "mouseReleased"])
+    await s("Input.dispatchMouseEvent", { type, x: r.x, y: r.y, button: "left", clickCount: 1 });
+}
+
+/**
+ * Type into a text field like a user: click it, select its text, type, press Enter.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {string} selector
+ * @param {string} text
+ */
+async function typeInto(s, evaluate, selector, text) {
+  await clickSelector(s, evaluate, selector);
+  await evaluate(`document.querySelector(${JSON.stringify(selector)}).select()`);
+  await s("Input.insertText", { text });
+  await pressKey(s, "Enter", "Enter", 13, 0);
+}
+
+/**
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {string} key
+ * @param {string} code
+ * @param {number} keyCode
+ * @param {number} modifiers 2 = Ctrl
+ */
+async function pressKey(s, key, code, keyCode, modifiers) {
+  const base = {
+    key,
+    code,
+    windowsVirtualKeyCode: keyCode,
+    nativeVirtualKeyCode: keyCode,
+    modifiers,
+  };
+  await s("Input.dispatchKeyEvent", { type: "rawKeyDown", ...base });
+  if (key === "Enter") await s("Input.dispatchKeyEvent", { type: "char", text: "\r", ...base });
+  await s("Input.dispatchKeyEvent", { type: "keyUp", ...base });
+}
+
+/**
+ * The builder scenario: template -> edit -> undo -> export -> reload.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {string} profile
+ * @param {number} deadline
+ */
+async function runBuilder(s, evaluate, out, problems, profile, deadline) {
+  const version = () => evaluate("Number(document.body.dataset.version || 0)");
+  /** @param {number} after */
+  const waitVersion = async (after) => {
+    while (Date.now() < deadline) {
+      if ((await version()) > after && (await evaluate("document.body.dataset.state")) === "ready")
+        return;
+      await sleep(100);
+    }
+    throw new Error("the builder did not update");
+  };
+  const urdf = () => evaluate("document.getElementById('urdf').textContent");
+  const downloads = join(profile, "downloads");
+  await s("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloads }).catch(
+    () => {},
+  );
+
+  // 1. New robot from the mecanum template.
+  await evaluate(
+    "(() => { const t = document.getElementById('template'); t.value = 'mecanum'; t.dispatchEvent(new Event('change')); })()",
+  );
+  await clickSelector(s, evaluate, "#btn-create");
+  await waitVersion(-1);
+  const a = await urdf();
+  out.created = {
+    links: await evaluate("document.body.dataset.links"),
+    summary: await evaluate("document.getElementById('summary').textContent"),
+  };
+  if (!/0 error\(s\), 0 warning\(s\)/.test(String(/** @type {any} */ (out.created).summary)))
+    problems.push(`template robot is not clean: ${/** @type {any} */ (out.created).summary}`);
+  if (!a.includes('<cylinder length="0.035" radius="0.04"/>'))
+    problems.push("template URDF lacks the 0.04 m wheels");
+
+  // 2. Edit one parameter in the template form.
+  let v = await version();
+  await typeInto(s, evaluate, '[data-param="wheel_radius"]', "0.05");
+  await waitVersion(v);
+  const b = await urdf();
+  out.editMs = Number(await evaluate("document.body.dataset.editMs"));
+  out.undoTitle = await evaluate("document.getElementById('btn-undo').title");
+  if (b === a || !b.includes('<cylinder length="0.035" radius="0.05"/>'))
+    problems.push("editing wheel_radius did not change the URDF");
+
+  // 3. Undo with the keyboard shortcut (focus outside the form fields).
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  v = await version();
+  await pressKey(s, "z", "KeyZ", 90, 2);
+  await waitVersion(v);
+  const c = await urdf();
+  out.undoRestored = c === a;
+  if (c !== a) problems.push("Ctrl+Z did not restore the URDF");
+  if ((await evaluate("document.querySelector('[data-param=\"wheel_radius\"]').value")) !== "0.04")
+    problems.push("the form does not show the undone value");
+
+  // 4. Select a wheel in the tree and edit its joint origin in the properties panel.
+  await clickSelector(s, evaluate, '#tree .t-link[data-link="front_left_wheel"]');
+  await sleep(200);
+  v = await version();
+  await typeInto(s, evaluate, '[data-key="joint.xyz.0"]', "0.11");
+  await waitVersion(v);
+  out.propertyEdit = (await urdf()).includes('xyz="0.11 0.125 0"');
+  if (!out.propertyEdit)
+    problems.push("editing the joint origin in the properties panel had no effect");
+  out.findingsAfterEdit = await evaluate("document.getElementById('summary').textContent");
+  v = await version();
+  await pressKey(s, "z", "KeyZ", 90, 2);
+  await waitVersion(v);
+
+  // 5. Export the URDF and the ROS 2 package.
+  for (const [btn, name] of [
+    ["#btn-export-urdf", "mecanum_bot.urdf"],
+    ["#btn-export-package", "mecanum_bot_description.zip"],
+  ]) {
+    await clickSelector(s, evaluate, btn);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 5000 && (await evaluate("document.body.dataset.lastExport")) !== name)
+      await sleep(100);
+    if ((await evaluate("document.body.dataset.lastExport")) !== name)
+      problems.push(`export ${name} did not happen`);
+    const file = join(downloads, name);
+    const t1 = Date.now();
+    while (Date.now() - t1 < 5000 && !existsSync(file)) await sleep(100);
+    if (existsSync(file)) {
+      const bytes = readFileSync(file);
+      /** @type {any} */ (out)[name] = bytes.length;
+      if (name.endsWith(".urdf") && bytes.toString("utf8") !== a)
+        problems.push("the downloaded URDF differs from the shown one");
+      if (name.endsWith(".zip") && bytes.readUInt32LE(0) !== 0x04034b50)
+        problems.push("the package is not a zip");
+    } else /** @type {any} */ (out)[name] = "not saved by this browser (export ran)";
+  }
+  out.exportNote = await evaluate("document.getElementById('export-note').textContent");
+
+  // 6. Reload: the robot comes back from this browser's storage.
+  const url = await evaluate("location.origin + location.pathname + '?s=builder'");
+  await s("Page.navigate", { url });
+  await sleep(500);
+  while (Date.now() < deadline && (await evaluate("document.body.dataset.state")) !== "ready")
+    await sleep(150);
+  const d = await urdf();
+  out.restoredAfterReload = d === a;
+  if (d !== a) problems.push("the autosaved robot was not restored after a reload");
 }

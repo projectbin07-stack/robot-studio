@@ -7,7 +7,7 @@ import { EXAMPLES } from "../core/examples.js";
 
 /**
  * @typedef {object} PageState
- * @property {string} source example id, or "files" for a dropped model
+ * @property {string} source example id, "files" for a dropped model, "builder" for the autosaved builder robot
  * @property {{ kind: "link" | "joint", name: string } | null} selected
  * @property {"visual" | "collision" | "both"} geometry
  * @property {boolean} frames link frame axes
@@ -78,7 +78,8 @@ export function decodeState(search) {
   const st = defaultState();
   const p = new URLSearchParams(search);
   const s = p.get("s");
-  if (s !== null && (EXAMPLES.some((e) => e.id === s) || s === "files")) st.source = s;
+  if (s !== null && (EXAMPLES.some((e) => e.id === s) || s === "files" || s === "builder"))
+    st.source = s;
   const sel = p.get("sel");
   const m = sel ? /^([lj]):(.+)$/.exec(sel) : null;
   if (m && NAME.test(m[2])) st.selected = { kind: m[1] === "l" ? "link" : "joint", name: m[2] };

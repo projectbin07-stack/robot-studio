@@ -97,6 +97,12 @@ export class RobotView {
     /** @type {import("../../vendor/urdf-inspector/src/core/tree.js").KinTree | null} */
     this.tree = null;
     this.generation = 0;
+    /** Parsed meshes per file system and path, reused when the builder redraws. */
+    /** @type {WeakMap<VirtualFs, Map<string, Promise<import("./meshes.js").LoadedMesh>>>} */
+    this.meshCache = new WeakMap();
+    /** Bounding boxes of loaded meshes in their file coordinates, by "link|kind|index". */
+    /** @type {Map<string, { min: [number, number, number], max: [number, number, number] }>} */
+    this.meshBounds = new Map();
 
     const ro = new ResizeObserver(() => this.resize());
     ro.observe(host);
@@ -150,11 +156,13 @@ export class RobotView {
    * @param {LoadedModel} model
    * @param {VirtualFs} fs
    * @param {Record<string, number>} q
+   * @param {{ keepCamera?: boolean }} [opts] keepCamera: redraw without moving the camera (builder edits)
    * @returns {Promise<MeshReport[]>}
    */
-  async show(model, fs, q) {
+  async show(model, fs, q, opts = {}) {
     const gen = ++this.generation;
     this.clear();
+    this.meshBounds.clear();
     const robot = model.report?.robot;
     const tree = model.report?.context?.tree ?? null;
     this.tree = tree;
@@ -191,11 +199,22 @@ export class RobotView {
         holder.add(placeholder);
         if (!ref?.resolved) continue;
         const path = ref.resolved;
+        let cache = this.meshCache.get(fs);
+        if (!cache) this.meshCache.set(fs, (cache = new Map()));
+        let loading = cache.get(path);
+        if (!loading) cache.set(path, (loading = loadMesh(fs, path)));
         pending.push(
-          loadMesh(fs, path).then(
-            ({ object, ownMaterials, missing }) => {
+          loading.then(
+            ({ object: shared, ownMaterials, missing }) => {
               if (gen !== this.generation) return null;
               holder.remove(placeholder);
+              const object = shared.clone();
+              const box = new THREE.Box3().setFromObject(object);
+              if (!box.isEmpty())
+                this.meshBounds.set(`${s.link}|${s.kind}|${s.index}`, {
+                  min: [box.min.x, box.min.y, box.min.z],
+                  max: [box.max.x, box.max.y, box.max.z],
+                });
               object.scale.multiply(new THREE.Vector3(...geom.scale));
               object.traverse((o) => {
                 if (!(o instanceof THREE.Mesh)) return;
@@ -236,12 +255,15 @@ export class RobotView {
     this.size = b.radius;
     this.buildHelpers(tree);
     this.setPose(q);
-    this.frame(b.center, b.radius);
-    this.rebuildGrid();
+    if (!opts.keepCamera) {
+      this.frame(b.center, b.radius);
+      this.rebuildGrid();
+    }
     this.applyOptions();
     const reports = await Promise.all(pending);
     if (gen !== this.generation) return [];
-    this.fit();
+    if (!opts.keepCamera) this.fit();
+    else this.render();
     return /** @type {MeshReport[]} */ (reports.filter((r) => r !== null));
   }
 

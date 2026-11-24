@@ -740,3 +740,34 @@ test("modelFromDoc names a file and reports meshes it cannot resolve", () => {
   assert.match(m.meshes[0].reason, /builder has no files/);
   assert.equal(modelFromDoc({ ...d, name: "" }).entry, "/builder/robot.urdf");
 });
+
+test("one-step actions: add child, add sensor with optical frame, collision from visual", async () => {
+  const { addChild, addSensor, collisionFromVisual } =
+    await import("../src/core/builder/actions.js");
+  const doc = generate("diff", { lidar: false, imu: false, depth_camera: false });
+  const c = addChild(doc, "base_link");
+  assert.equal(c.link, "link_1");
+  assert.equal(findJoint(c.doc, "link_1_joint")?.parent, "base_link");
+  assert.equal(addChild(c.doc, "link_1").link, "link_2");
+  const cam = addSensor(c.doc, "camera", "link_1");
+  assert.equal(cam.link, "camera_link");
+  assert.equal(findJoint(cam.doc, "camera_optical_joint")?.child, "camera_optical_frame");
+  const cam2 = addSensor(cam.doc, "camera", "base_link", [0.1, 0, 0.1]);
+  assert.equal(cam2.link, "camera_link_2");
+  assert.ok(findLink(cam2.doc, "camera_2_optical_frame"));
+  assert.deepEqual(findJoint(cam2.doc, "camera_2_joint")?.origin.xyz, [0.1, 0, 0.1]);
+  const lidar = addSensor(cam2.doc, "lidar2d", "base_link");
+  assert.equal(findLink(lidar.doc, "lidar_link")?.sensor, "lidar2d");
+  const ed = new Editor(lidar.doc);
+  assert.deepEqual(errorsAndWarnings(ed), []);
+  assert.throws(() => addSensor(doc, /** @type {any} */ ("sonar"), "base_link"), /unknown sensor/);
+  // A visual-only link gets its collision from the visual.
+  const bare = clone(doc);
+  /** @type {any} */ (findLink(bare, "caster_link")).collisions = [];
+  const fixed = collisionFromVisual(bare, "caster_link");
+  assert.deepEqual(findLink(fixed, "caster_link")?.collisions[0].geometry, {
+    type: "sphere",
+    radius: 0.015,
+  });
+  assert.throws(() => collisionFromVisual(bare, "base_footprint"), /no visual/);
+});
