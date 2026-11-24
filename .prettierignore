@@ -1,0 +1,9 @@
+node_modules/
+coverage/
+package-lock.json
+vendor/
+examples/
+tests/corpus/
+docs/img/
+_site/
+.venv/

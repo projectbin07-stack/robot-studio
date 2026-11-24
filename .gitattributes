@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.stl binary
+*.zip binary
+# Vendored and third-party files are kept byte-for-byte as published upstream.
+vendor/** -text
+examples/third_party/** -text
