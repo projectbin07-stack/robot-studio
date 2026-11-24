@@ -1,0 +1,92 @@
+<?xml version="1.0"?>
+<!-- Sensor macros: a 2D LiDAR (STL mesh), an IMU and a depth camera (OBJ
+     mesh) with its optical frame (REP 103: z forward, x right, y down). -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="lidar" params="parent *origin">
+    <joint name="lidar_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="lidar_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="lidar_link">
+      <visual>
+        <geometry>
+          <mesh filename="package://studio_mecanum_description/meshes/lidar.stl"/>
+        </geometry>
+        <material name="sensor_dark"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.02"/>
+        <geometry>
+          <cylinder radius="0.035" length="0.04"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertial m="0.17" r="0.035" h="0.04">
+        <origin xyz="0 0 0.02"/>
+      </xacro:cylinder_inertial>
+    </link>
+    <!-- The scan plane, where the ranges are measured from. -->
+    <joint name="laser_joint" type="fixed">
+      <parent link="lidar_link"/>
+      <child link="laser_frame"/>
+      <origin xyz="0 0 0.031"/>
+    </joint>
+    <link name="laser_frame"/>
+  </xacro:macro>
+
+  <xacro:macro name="imu" params="parent *origin">
+    <joint name="imu_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="imu_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="imu_link">
+      <visual>
+        <geometry>
+          <box size="0.02 0.02 0.004"/>
+        </geometry>
+        <material name="board_green"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.02 0.02 0.004"/>
+        </geometry>
+      </collision>
+      <xacro:box_inertial m="0.004" x="0.02" y="0.02" z="0.004">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="depth_camera" params="parent *origin">
+    <joint name="camera_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child link="camera_link"/>
+      <xacro:insert_block name="origin"/>
+    </joint>
+    <link name="camera_link">
+      <visual>
+        <geometry>
+          <mesh filename="package://studio_mecanum_description/meshes/camera.obj"/>
+        </geometry>
+        <material name="sensor_dark"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.025 0.09 0.025"/>
+        </geometry>
+      </collision>
+      <xacro:box_inertial m="0.08" x="0.025" y="0.09" z="0.025">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+    <joint name="camera_optical_joint" type="fixed">
+      <parent link="camera_link"/>
+      <child link="camera_optical_frame"/>
+      <origin xyz="0.015 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+    <link name="camera_optical_frame"/>
+  </xacro:macro>
+
+</robot>

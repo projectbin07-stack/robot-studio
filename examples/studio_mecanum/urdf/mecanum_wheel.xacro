@@ -1,0 +1,59 @@
+<?xml version="1.0"?>
+<!-- A mecanum wheel: hub plus a ring of rollers at +/-45 degrees, built by a
+     recursive macro. Rollers are visual only; the collision shape and the
+     inertia are those of a solid cylinder of the wheel's outer radius. -->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="roller_count" value="9"/>
+  <xacro:property name="roller_radius" value="0.008"/>
+
+  <!-- One roller at angle index i; recurses until all rollers are placed.
+       Roll angle +/-45 deg tilts the roller axis out of the wheel plane. -->
+  <xacro:macro name="rollers" params="i hand">
+    <xacro:property name="theta" value="${2 * pi * i / roller_count}"/>
+    <visual name="roller_${i}">
+      <origin xyz="${(wheel_radius - roller_radius) * cos(theta)} 0 ${(wheel_radius - roller_radius) * sin(theta)}"
+              rpy="${hand * pi / 4} ${-theta} 0"/>
+      <geometry>
+        <cylinder radius="${roller_radius}" length="${2 * pi * wheel_radius / roller_count * 1.1}"/>
+      </geometry>
+      <material name="roller_black"/>
+    </visual>
+    <xacro:if value="${i + 1 &lt; roller_count}">
+      <xacro:rollers i="${i + 1}" hand="${hand}"/>
+    </xacro:if>
+  </xacro:macro>
+
+  <!-- side: 1 left, -1 right; front: 1 front, -1 rear. Mecanum layout in an
+       "X" seen from above: front-left and rear-right rollers share a hand. -->
+  <xacro:macro name="mecanum_wheel" params="name side front">
+    <link name="${name}_wheel_link">
+      <visual name="hub">
+        <origin rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius - 2 * roller_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="hub_orange"/>
+      </visual>
+      <xacro:rollers i="0" hand="${side * front}"/>
+      <collision>
+        <origin rpy="${pi/2} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertial m="${wheel_mass}" r="${wheel_radius}" h="${wheel_width}">
+        <origin rpy="${pi/2} 0 0"/>
+      </xacro:cylinder_inertial>
+    </link>
+
+    <joint name="${name}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${name}_wheel_link"/>
+      <origin xyz="${front * wheel_x} ${side * wheel_y} 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.01" friction="0.0"/>
+    </joint>
+  </xacro:macro>
+
+</robot>

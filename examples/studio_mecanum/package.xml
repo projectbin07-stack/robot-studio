@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>studio_mecanum_description</name>
+  <version>0.1.0</version>
+  <description>
+    Illustrative mecanum-wheel base with a 2D LiDAR, an IMU and a depth camera,
+    written as xacro for Robot Studio's examples. Not modelled on any commercial robot.
+  </description>
+  <maintainer email="237563561+projectbin07-stack@users.noreply.github.com">Navaneeth KG</maintainer>
+  <license>MIT</license>
+</package>

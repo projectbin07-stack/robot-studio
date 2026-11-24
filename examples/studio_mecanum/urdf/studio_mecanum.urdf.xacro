@@ -1,0 +1,99 @@
+<?xml version="1.0"?>
+<!-- studio_mecanum: an illustrative four-wheel mecanum base with a 2D LiDAR,
+     an IMU and a depth camera, written for Robot Studio's examples. Not
+     modelled on any commercial robot; dimensions and masses are plausible
+     round numbers, not measurements.
+
+     Arguments (xacro name:=value):
+       use_lidar   true | false   mount the LiDAR on the top plate
+       use_camera  true | false   mount the depth camera on the front
+       wheel_radius               outer radius of the mecanum wheels in metres -->
+<robot name="studio_mecanum" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="use_lidar" default="true"/>
+  <xacro:arg name="use_camera" default="true"/>
+  <xacro:arg name="wheel_radius" default="0.04"/>
+
+  <xacro:include filename="$(find studio_mecanum_description)/urdf/inertia.xacro"/>
+  <xacro:include filename="mecanum_wheel.xacro"/>
+  <xacro:include filename="sensors.xacro"/>
+
+  <!-- Chassis -->
+  <xacro:property name="chassis_x" value="0.30"/>
+  <xacro:property name="chassis_y" value="0.20"/>
+  <xacro:property name="chassis_z" value="0.06"/>
+  <xacro:property name="chassis_mass" value="2.2"/>
+  <xacro:property name="clearance" value="0.01"/>
+
+  <!-- Wheels -->
+  <xacro:property name="wheel_radius" value="$(arg wheel_radius)"/>
+  <xacro:property name="wheel_width" value="0.035"/>
+  <xacro:property name="wheel_mass" value="0.15"/>
+  <xacro:property name="wheel_x" value="0.10"/>
+  <xacro:property name="wheel_y" value="${chassis_y / 2 + wheel_width / 2 + 0.005}"/>
+
+  <material name="chassis_grey"><color rgba="0.32 0.35 0.40 1"/></material>
+  <material name="plate_silver"><color rgba="0.72 0.74 0.76 1"/></material>
+  <material name="hub_orange"><color rgba="0.92 0.42 0.12 1"/></material>
+  <material name="roller_black"><color rgba="0.08 0.08 0.09 1"/></material>
+  <material name="sensor_dark"><color rgba="0.15 0.16 0.18 1"/></material>
+  <material name="board_green"><color rgba="0.10 0.45 0.25 1"/></material>
+
+  <!-- REP 105: base_footprint on the ground, base_link at the wheel axles. -->
+  <link name="base_footprint"/>
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}"/>
+  </joint>
+
+  <link name="base_link">
+    <visual name="chassis">
+      <origin xyz="0 0 ${chassis_z / 2 - wheel_radius + clearance + 0.02}"/>
+      <geometry>
+        <box size="${chassis_x} ${chassis_y} ${chassis_z}"/>
+      </geometry>
+      <material name="chassis_grey"/>
+    </visual>
+    <visual name="top_plate">
+      <origin xyz="0 0 ${chassis_z - wheel_radius + clearance + 0.02 + 0.002}"/>
+      <geometry>
+        <box size="${chassis_x - 0.02} ${chassis_y - 0.02} 0.004"/>
+      </geometry>
+      <material name="plate_silver"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${chassis_z / 2 - wheel_radius + clearance + 0.02}"/>
+      <geometry>
+        <box size="${chassis_x} ${chassis_y} ${chassis_z}"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial m="${chassis_mass}" x="${chassis_x}" y="${chassis_y}" z="${chassis_z}">
+      <origin xyz="0 0 ${chassis_z / 2 - wheel_radius + clearance + 0.02}"/>
+    </xacro:box_inertial>
+  </link>
+
+  <xacro:mecanum_wheel name="front_left" side="1" front="1"/>
+  <xacro:mecanum_wheel name="front_right" side="-1" front="1"/>
+  <xacro:mecanum_wheel name="rear_left" side="1" front="-1"/>
+  <xacro:mecanum_wheel name="rear_right" side="-1" front="-1"/>
+
+  <xacro:property name="top" value="${chassis_z - wheel_radius + clearance + 0.02 + 0.004}"/>
+
+  <xacro:imu parent="base_link">
+    <origin xyz="0 0 ${top - 0.004 - 0.002}"/>
+  </xacro:imu>
+
+  <xacro:if value="$(arg use_lidar)">
+    <xacro:lidar parent="base_link">
+      <origin xyz="0.04 0 ${top}"/>
+    </xacro:lidar>
+  </xacro:if>
+
+  <xacro:if value="$(arg use_camera)">
+    <xacro:depth_camera parent="base_link">
+      <origin xyz="${chassis_x / 2 + 0.0125} 0 ${top - chassis_z / 2}"/>
+    </xacro:depth_camera>
+  </xacro:if>
+
+</robot>
