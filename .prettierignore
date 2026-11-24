@@ -7,3 +7,4 @@ tests/corpus/
 docs/img/
 _site/
 .venv/
+python/tests/fixtures/

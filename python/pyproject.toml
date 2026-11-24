@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling>=1.21,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "robot-studio-bag"
+dynamic = ["version"]
+description = "Turn a ROS 2 bag into Robot Studio's recording format so the studio can replay it through its estimators and views."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Navaneeth KG" }]
+keywords = ["ros2", "rosbag", "mcap", "lidar", "robot-studio"]
+dependencies = [
+    # Bag reading, CDR decoding and message definitions; pinned to a release tag.
+    "rosbag-inspect @ git+https://github.com/projectbin07-stack/rosbag-inspect@v0.2.0",
+]
+
+[project.optional-dependencies]
+# zstd-compressed bags on Python 3.10-3.13 (rosbag-inspect's zstd extra).
+zstd = ["zstandard>=0.22,<1"]
+dev = [
+    "mypy>=1.11,<3",
+    "pytest>=8,<10",
+    "pytest-cov>=5,<8",
+    "ruff>=0.6,<1",
+]
+
+[project.scripts]
+robot-studio-bag = "robot_studio_bag.cli:main"
+
+[tool.hatch.version]
+path = "src/robot_studio_bag/__init__.py"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/robot_studio_bag"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src", "tests"]
+mypy_path = ["src", "tests"]
+explicit_package_bases = true
+
+[tool.coverage.run]
+source = ["robot_studio_bag"]

@@ -1,0 +1,191 @@
+{
+  "format": "robot-studio-sim-recording/1",
+  "note": "Simulation output of Robot Studio's models (made-up noise and motor parameters unless stated). Not a measurement of any real robot.",
+  "input": "mecanum",
+  "robot": {
+    "name": "mecanum_bot",
+    "drive": "mecanum",
+    "base_frame": "base_link",
+    "root_frame": "base_footprint",
+    "wheels": [
+      {
+        "label": "FL",
+        "joint": "front_left_wheel_joint",
+        "axis_sign": 1
+      },
+      {
+        "label": "FR",
+        "joint": "front_right_wheel_joint",
+        "axis_sign": 1
+      },
+      {
+        "label": "RL",
+        "joint": "rear_left_wheel_joint",
+        "axis_sign": 1
+      },
+      {
+        "label": "RR",
+        "joint": "rear_right_wheel_joint",
+        "axis_sign": 1
+      }
+    ],
+    "wheel_radius": 0.04,
+    "half_length": 0.1,
+    "half_width": 0.125,
+    "max_wheel_speed": 20,
+    "ticks_per_wheel_rev": 38000,
+    "footprint_radius": 0.1998,
+    "base_height": 0.04,
+    "drive_pose": {
+      "x": 0,
+      "y": 0,
+      "theta": 0
+    },
+    "root_in_base": {
+      "x": 0,
+      "y": 0,
+      "theta": 0,
+      "z": -0.04
+    },
+    "static_transforms": [
+      {
+        "parent": "base_footprint",
+        "child": "base_link",
+        "xyz": [
+          0,
+          0,
+          0.04
+        ],
+        "rpy": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "parent": "base_link",
+        "child": "lidar_link",
+        "xyz": [
+          0.06,
+          0,
+          0.07
+        ],
+        "rpy": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "parent": "base_link",
+        "child": "imu_link",
+        "xyz": [
+          0,
+          0,
+          0.02
+        ],
+        "rpy": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "parent": "base_link",
+        "child": "depth_camera_link",
+        "xyz": [
+          0.165,
+          0,
+          0.03
+        ],
+        "rpy": [
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "parent": "depth_camera_link",
+        "child": "depth_camera_optical_frame",
+        "xyz": [
+          0,
+          0,
+          0
+        ],
+        "rpy": [
+          -1.570796327,
+          0,
+          -1.570796327
+        ]
+      }
+    ]
+  },
+  "world": {
+    "id": "office",
+    "name": "Office"
+  },
+  "route": "demo",
+  "seed": 1,
+  "settings_changed": {},
+  "timing": {
+    "control_rate_hz": 100,
+    "substeps": 10,
+    "steps": 300,
+    "seconds": 3
+  },
+  "sensors": {
+    "lidar": {
+      "frame_id": "lidar_link",
+      "source": "settings",
+      "rate_hz": 10,
+      "beams": 180,
+      "range_min": 0.12,
+      "range_max": 8,
+      "range_noise": 0.02,
+      "dropout": 0.03,
+      "height": 0.11
+    },
+    "imu": {
+      "frame_id": "imu_link",
+      "rate_hz": 100,
+      "error_model": "defaults (MPU-6050 datasheet typical noise density, no bias)"
+    },
+    "encoders": {
+      "ticks_per_wheel_rev": 38000,
+      "decoding": "4x quadrature"
+    }
+  },
+  "result": {
+    "distance_m": 1.374,
+    "collisions": 0,
+    "saturated_steps": 0,
+    "final_pose": {
+      "x": 3.3738,
+      "y": 6.9905,
+      "theta": -0.0117
+    },
+    "errors_m": {
+      "wheel_odometry": {
+        "final": 0.0381,
+        "rms": 0.0161,
+        "max": 0.0381
+      },
+      "scan_matching": {
+        "final": 0.063,
+        "rms": 0.0521,
+        "max": 0.0657
+      },
+      "mcl": {
+        "final": 0.0329,
+        "rms": 0.0375,
+        "max": 0.0411
+      }
+    },
+    "scan_match_accept_rate": 1,
+    "map_precision": {
+      "occupied_cells": 640,
+      "within_0_1_m": 0.975
+    }
+  },
+  "notes": []
+}

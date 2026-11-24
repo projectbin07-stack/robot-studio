@@ -6,3 +6,6 @@ _site/
 .venv/
 __pycache__/
 out/
+*.egg-info/
+.coverage
+.pytest_cache/
