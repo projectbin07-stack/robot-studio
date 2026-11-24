@@ -15,6 +15,19 @@ import { normalizeSettings } from "./core/sim/settings.js";
 import { createSim, step, simErrors, DT } from "./core/sim/sim.js";
 import { ROUTES, createRoute } from "./core/sim/routes.js";
 import { recordingFiles } from "./core/sim/record.js";
+import { parseRecording } from "./core/ros/recording.js";
+import { recordingToBag } from "./core/ros/bag.js";
+import { VERSION } from "./core/version.js";
+
+/**
+ * The bag's name: the last part of its directory.
+ * @param {string} dir
+ */
+export const bagName = (dir) =>
+  dir
+    .replace(/[\\/]+$/, "")
+    .split(/[\\/]/)
+    .pop() || "bag";
 
 /**
  * @typedef {object} SimIo
@@ -39,6 +52,7 @@ errors against the simulated ground truth. Simulation output only.
   --seed N             random seed (default 1)
   --out DIR            write trajectory.csv, scans.jsonl, imu.csv, wheel_state.csv,
                        odometry.csv, joint_states.csv, map.pgm/.yaml, world.json, summary.json
+  --bag DIR            also write the run as a ROS 2 bag (metadata.yaml + MCAP; docs/ros2.md)
   --imu-cal FILE       imu-calibration-lab JSON export as the IMU error model
   --set key=value      a simulation setting, e.g. lidar.beams=360, drive.slip=false,
                        estimators.particles=0 (repeatable; list in docs/simulation.md)
@@ -48,6 +62,35 @@ errors against the simulated ground truth. Simulation output only.
 `;
 
 class SimUsage extends Error {}
+
+/**
+ * The robot to simulate: a template id, or a URDF / xacro file (expanded,
+ * checked and imported as a document).
+ * @param {string} input
+ * @param {Record<string, string>} args xacro arguments
+ * @param {(path: string) => boolean} exists
+ * @returns {{ ok: true, doc: import("./core/builder/document.js").RobotDoc, model: import("./core/model.js").LoadedModel }
+ *   | { ok: false, code: number, message: string }}
+ */
+export function loadRobotInput(input, args, exists) {
+  if (TEMPLATES.some((t) => t.id === input) && !exists(input)) {
+    const doc = generate(input, {});
+    return { ok: true, doc, model: modelFromDoc(doc) };
+  }
+  if (!exists(input)) return { ok: false, code: 3, message: `cannot read file: ${input}` };
+  const fs = new NodeFs({});
+  const entry = abs(input);
+  fs.discoverAround(entry);
+  const loaded = loadModel(fs, entry, {
+    args,
+    env: /** @type {Record<string, string>} */ (process.env),
+  });
+  if (loaded.error || !loaded.urdf)
+    return { ok: false, code: 2, message: loaded.error?.message ?? "the model could not be read" };
+  const imp = importUrdf(loaded.urdf, { entry });
+  if (!imp.doc) return { ok: false, code: 2, message: imp.notes.join("; ") };
+  return { ok: true, doc: imp.doc, model: loaded };
+}
 
 /**
  * @param {string} v
@@ -77,6 +120,7 @@ export function simCommand(argv, io) {
         seconds: { type: "string", default: "60" },
         seed: { type: "string", default: "1" },
         out: { type: "string" },
+        bag: { type: "string" },
         "imu-cal": { type: "string" },
         set: { type: "string", multiple: true },
         arg: { type: "string", multiple: true },
@@ -128,36 +172,12 @@ function run(values, positionals, io) {
     if (!m) throw new SimUsage(`--arg expects name=value, got '${a}'`);
     args[m[1]] = m[2];
   }
-  /** @type {import("./core/builder/document.js").RobotDoc} */
-  let doc;
-  let model;
-  if (TEMPLATES.some((t) => t.id === input) && !io.exists(input)) {
-    doc = generate(input, {});
-    model = modelFromDoc(doc);
-  } else {
-    if (!io.exists(input)) {
-      io.err(`robot-studio sim: cannot read file: ${input}\n`);
-      return 3;
-    }
-    const fs = new NodeFs({});
-    const entry = abs(input);
-    fs.discoverAround(entry);
-    const loaded = loadModel(fs, entry, {
-      args,
-      env: /** @type {Record<string, string>} */ (process.env),
-    });
-    if (loaded.error || !loaded.urdf) {
-      io.err(`robot-studio sim: ${loaded.error?.message ?? "the model could not be read"}\n`);
-      return 2;
-    }
-    const imp = importUrdf(loaded.urdf, { entry });
-    if (!imp.doc) {
-      io.err(`robot-studio sim: ${imp.notes.join("; ")}\n`);
-      return 2;
-    }
-    doc = imp.doc;
-    model = loaded;
+  const loaded = loadRobotInput(input, args, io.exists);
+  if (!loaded.ok) {
+    io.err(`robot-studio sim: ${loaded.message}\n`);
+    return loaded.code;
   }
+  const { doc, model } = loaded;
   const r = simRobot(model, doc);
   if (!r.ok) {
     io.err(`robot-studio sim: cannot simulate this robot: ${r.reason}\n`);
@@ -206,7 +226,9 @@ function run(values, positionals, io) {
   const settings = normalizeSettings(given);
 
   // Run
-  const sim = createSim(r.robot, world, settings, { log: Boolean(values.out) || values.json });
+  const sim = createSim(r.robot, world, settings, {
+    log: Boolean(values.out) || Boolean(values.bag) || values.json,
+  });
   const route = createRoute(values.route, r.robot, world);
   const steps = Math.round(seconds / DT);
   const t0 = io.now();
@@ -214,10 +236,21 @@ function run(values, positionals, io) {
   const ms = io.now() - t0;
   const meta = { route: values.route, input, worldId: world.id };
   /** @type {Record<string, string | Uint8Array> | null} */
-  const files = values.out || values.json ? recordingFiles(sim, meta) : null;
+  const files = values.out || values.bag || values.json ? recordingFiles(sim, meta) : null;
   if (values.out && files) {
     io.mkdir(values.out);
     for (const [name, data] of Object.entries(files)) io.writeFile(`${values.out}/${name}`, data);
+  }
+  /** @type {ReturnType<typeof recordingToBag> | null} */
+  let bag = null;
+  if (values.bag && files) {
+    bag = recordingToBag(parseRecording(files), {
+      name: bagName(values.bag),
+      library: `robot-studio ${VERSION}`,
+    });
+    io.mkdir(values.bag);
+    for (const [path, data] of Object.entries(bag.files))
+      io.writeFile(`${values.bag}/${path.split("/").pop()}`, data);
   }
   if (values.json && files) {
     io.out(String(files["summary.json"]));
@@ -255,6 +288,10 @@ function run(values, positionals, io) {
   );
   if (values.out && files)
     lines.push(`wrote     ${values.out}/ (${Object.keys(files).length} files)`);
+  if (bag)
+    lines.push(
+      `wrote     ${values.bag}/ (ROS 2 bag: ${bag.messages} messages, ${bag.bytes} bytes of MCAP, labelled simulated)`,
+    );
   io.out(lines.join("\n") + "\n");
   return 0;
 }

@@ -14,6 +14,7 @@ import { exportXacro, packageZip } from "./core/builder/export.js";
 import { mecanumConfig } from "./core/builder/drive.js";
 import { modelFromDoc } from "./core/builder/editor.js";
 import { simCommand } from "./simcli.js";
+import { rosCommand } from "./roscli.js";
 
 /**
  * @typedef {object} CliIo
@@ -37,7 +38,10 @@ Usage:
   robot-studio export <robot.urdf|robot.xacro> [--arg name=value ...] [--format F] [-o out]
   robot-studio templates
   robot-studio sim <robot.urdf|robot.xacro|template> [--world W] [--route R]
-                   [--seconds S] [--seed N] [--out DIR] [--imu-cal FILE] [--set k=v]
+                   [--seconds S] [--seed N] [--out DIR] [--bag DIR] [--imu-cal FILE] [--set k=v]
+  robot-studio bag <recording-dir> -o <bag-dir>
+  robot-studio replay <recording-dir> [--json]
+  robot-studio compare <recording-dir> <robot.urdf|robot.xacro|template> [--json]
   robot-studio --help | --version
 
 xacro     expand a xacro file the way the official xacro does and print the
@@ -53,6 +57,11 @@ templates list the templates and their parameters with defaults
 sim       drive the robot in a simulated world (wheels, encoders, IMU, LiDAR,
           wheel odometry, scan matching, MCL) and write the recording;
           'robot-studio sim --help' for the options. Simulation output only.
+bag       write a recording as a ROS 2 bag (MCAP + metadata.yaml)
+replay    replay a recording (simulated, or a bag imported with the Python
+          companion robot-studio-bag) through the estimators
+compare   run a recording's command schedule on the simulator and compare
+          the firmware telemetry (ODOMETRY, WHEEL_STATE) of both runs
 
   --format F           (new, export) urdf (default), xacro, toml (four-wheel
                        mecanum bases: mecanum-kinematics config) or package
@@ -96,6 +105,12 @@ export function main(argv, io) {
     }
     throw e;
   };
+  if (argv[0] === "bag" || argv[0] === "replay" || argv[0] === "compare")
+    return rosCommand(argv[0], argv.slice(1), {
+      ...io,
+      readText: io.readText ?? (() => ""),
+      mkdir: io.mkdir ?? (() => {}),
+    });
   if (argv[0] === "sim")
     return simCommand(argv.slice(1), {
       ...io,
