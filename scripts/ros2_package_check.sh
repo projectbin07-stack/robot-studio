@@ -35,13 +35,24 @@ for pkg in $(ls src); do
   done
   ros2 launch "$pkg" display.launch.py --show-args
   urdf=$(ls "$share"/urdf/*.urdf | head -n 1)
+  # The description goes in a parameter file: rcl does not take multi-line XML in -p.
+  python3 - "$urdf" > /tmp/rsp.yaml << 'PY'
+import sys
+
+import yaml
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    text = f.read()
+print(yaml.safe_dump({"robot_state_publisher": {"ros__parameters": {"robot_description": text}}}))
+PY
   set +e
   timeout 6 ros2 run robot_state_publisher robot_state_publisher \
-    --ros-args -p robot_description:="$(cat "$urdf")" > /tmp/rsp.log 2>&1
+    --ros-args --params-file /tmp/rsp.yaml > /tmp/rsp.log 2>&1
   code=$?
   set -e
   cat /tmp/rsp.log
   test "$code" -eq 124 # still running when stopped: it accepted the description
+  grep -q "got segment" /tmp/rsp.log # it parsed the links
   if grep -qiE "error|failed" /tmp/rsp.log; then
     echo "robot_state_publisher reported an error for $pkg"
     exit 1
