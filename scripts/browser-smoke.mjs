@@ -9,6 +9,7 @@
 //     [--builder]           create a mecanum robot from the template through the UI,
 //                           edit a parameter, undo it with Ctrl+Z, export URDF and the
 //                           ROS 2 package, reload and check the autosave is restored
+//     [--edit-model]        click "Edit the open model" (import as an editable robot)
 //     [--template id]       create a robot from that template through the UI
 //     [--select-link name]  click a link in the tree before the screenshot
 //
@@ -36,6 +37,7 @@ const { values } = parseArgs({
     builder: { type: "boolean", default: false },
     "select-link": { type: "string" },
     template: { type: "string" },
+    "edit-model": { type: "boolean", default: false },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -189,6 +191,18 @@ try {
   const builderProblems = [];
   if (values.builder && st === "ready") {
     await runBuilder(s, evaluate, builder, builderProblems, profile, deadline);
+  }
+  if (values["edit-model"] && st === "ready") {
+    await clickSelector(s, evaluate, "#btn-edit-model");
+    while (Date.now() < deadline) {
+      if (
+        (await evaluate("document.body.classList.contains('editing')")) &&
+        (await evaluate("document.body.dataset.state")) === "ready"
+      )
+        break;
+      await sleep(100);
+    }
+    await sleep(500);
   }
   if (values.template && st === "ready") {
     const before = await evaluate("Number(document.body.dataset.version || 0)");

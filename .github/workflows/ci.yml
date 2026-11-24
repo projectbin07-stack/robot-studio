@@ -79,6 +79,10 @@ jobs:
         run: |
           node --test tests/xacro-golden.test.js
           node scripts/golden-report.js
+      - name: Builder exports are current, and the official xacro's expansion of each exported xacro equals the exported URDF
+        run: |
+          node scripts/builder-fixtures.js --check
+          node --test --test-name-pattern "official xacro" tests/builder-templates.test.js
 
   vendor:
     name: Vendored code matches its pinned upstream
@@ -90,6 +94,47 @@ jobs:
           node-version: "24"
       - name: Re-fetch urdf-inspector at its tag and three.js from npm, compare every byte
         run: node scripts/vendor.mjs --verify
+
+  mecanum-interop:
+    name: Exported TOML loads in mecanum-kinematics (public tag) and its IK/FK agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Install mecanum-kinematics from its public release tag
+        run: python -m pip install "mecanum-kinematics @ git+https://github.com/projectbin07-stack/mecanum-kinematics@v0.1.0"
+      - name: The committed exports are what the builder writes today
+        run: node scripts/builder-fixtures.js --check
+      - name: Load each TOML with mecanum-kinematics and compare wheel geometry, IK and FK with Robot Studio
+        run: python scripts/mecanum_interop.py
+      - name: The CLI writes the same TOML
+        run: |
+          node bin/robot-studio.js new mecanum -f toml -o cli.toml
+          cmp cli.toml tests/corpus/builder/mecanum.toml
+
+  ros2-package:
+    name: Exported ROS 2 packages build with colcon (ros:humble-ros-base)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Export packages from the three templates and from an opened model with meshes
+        run: |
+          mkdir pkgs
+          B=bin/robot-studio.js
+          node $B new mecanum -f package -o pkgs/mecanum.zip
+          node $B new diff --set camera=true -f package -o pkgs/diff.zip
+          node $B new arm --set dof=6 --set camera=true -f package -o pkgs/arm.zip
+          node $B export examples/studio_mecanum/urdf/studio_mecanum.urdf.xacro -f package -o pkgs/studio.zip
+      - name: colcon build, check_urdf, ROS xacro, ros2 launch --show-args, robot_state_publisher
+        run: docker run --rm -v "$PWD/pkgs:/pkgs:ro" -v "$PWD/scripts:/scripts:ro" ros:humble-ros-base bash /scripts/ros2_package_check.sh
 
   browser:
     name: Browser smoke test (headless Chrome, WebGL via SwiftShader)
@@ -111,6 +156,13 @@ jobs:
           $S --url "http://127.0.0.1:8000/?a=use_lidar:false,use_camera:false" --expect-links 7
           $S --url "http://127.0.0.1:8000/" --upload tests/fixtures/description.zip --expect-links 1 --expect-summary "meshes 1/1 shown"
           $S --url "http://127.0.0.1:8000/?theme=dark" --width 390 --height 844 --mobile --expect-links 11 --screenshot phone.png
+      - name: "Builder: mecanum template through the UI, edit a parameter, undo with Ctrl+Z, export, reload (edit timing in the output)"
+        # The server started in the previous step is still running.
+        run: |
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
+          $S --url "http://127.0.0.1:8000/" --builder --select-link front_left_wheel --expect-links 10 --expect-summary "0 error(s), 0 warning(s)" --screenshot builder.png
+          $S --url "http://127.0.0.1:8000/?s=r2d2" --edit-model --expect-links 16 --expect-summary "meshes 8/8 shown"
+          $S --url "http://127.0.0.1:8000/" --template arm --expect-links 9 --expect-summary "0 error(s), 0 warning(s), 0 note(s)"
       - uses: actions/upload-artifact@v7
         if: always()
         with:
