@@ -63,54 +63,119 @@ Not done (moved on): a transform gizmo (numeric fields only); editing
 mimic and dynamics in the UI (the document and operations support them);
 importing xacro as xacro (the expansion is imported).
 
-## Milestone 3: Simulation
+## Milestone 3: Simulation (v0.3.0, done)
 
-Drive the model and simulate its sensors, labelled as simulation
-throughout. Builds on the builder: a template robot (or an imported one)
-is the thing that is driven.
+Drive the robot that is open in the studio, simulate its sensors at its
+URDF frames, run the estimators and compare them with the simulated truth,
+labelled as simulation throughout. Details in
+[simulation.md](simulation.md). Validation: software tests and simulation
+(model output); hardware none.
 
-Acceptance criteria:
+Acceptance criteria (the five planned at the end of milestone 2, then the
+milestone 3 brief) and where they stand:
 
-1. Kinematic drive from the wheel geometry urdf-inspector measures
-   (`measureWheels`, already used by `src/core/builder/drive.js`): mecanum
-   IK/FK there is cross-checked against mecanum-kinematics in CI; add a
-   differential model with the same conventions. Keyboard / on-screen
-   joystick produce a body twist, wheel speeds within the joints' velocity
-   limits (saturated as mecanum-kinematics does), and the robot moving on
-   the grid; wheel joints turn in the view. IK/FK agree to 1e-9 (test).
-2. 2D LiDAR from lidar-slam-lab's ray caster (`lidar.js`, `geometry.js`,
-   `world.js`, vendored like urdf-inspector) mounted at every link tagged
-   `lidar2d` (template mounts or tagged on import); range, resolution and
-   noise as builder parameters; a simple world editor (walls, boxes); scans
-   drawn in 3D; a test checks ranges against hand-computed values for a
-   square room.
-3. IMU at links tagged `imu` with noise and bias; optional calibration
-   constants from imu-calibration-lab's JSON; encoders with ticks per
-   revolution and quantisation on the wheel joints; seeded randomness so
-   runs are reproducible (test).
-4. TF tree view and time plots (wheel speeds, IMU, pose); CSV export.
-5. Every screen and export says "simulated"; nothing is presented as
-   measured.
+1. **Met.** Kinematic drive from the wheels urdf-inspector measures:
+   mecanum (four wheels) and differential (two), detected automatically;
+   command twist → firmware-mirrored IK, saturation (scaled as
+   mecanum-kinematics and the firmware do) and per-wheel PI loop → motor
+   model → slip option → forward kinematics → SE(2) pose; deterministic for
+   a seed, fixed 10 ms step. Wheel joints turn in the view. With ideal
+   wheels IK/FK agree with the analytic pose to 1e-9 m and the wheel speeds
+   with `mecanumInverse` to 1e-12 (tests); keyboard, gamepad and touch
+   sticks give the twist.
+2. **Met.** 2D LiDAR from lidar-slam-lab's ray caster (vendored v0.1.0) at
+   the link tagged `lidar2d`, its pose from FK; range, beams, noise, dropout
+   and rate as settings or from a URDF Gazebo `<sensor>` tag; a world editor
+   (walls, boxes, cylinders, start, route) with heights; rays and returns in
+   3D; a test checks ranges against hand-computed distances in a square
+   room. Only the first level LiDAR is simulated.
+3. **Met.** IMU at the link tagged `imu` (gravity, rotation rate,
+   centripetal acceleration, noise, bias) with imu-calibration-lab's JSON
+   as the error model; encoders with lines, gear ratio, 4x decoding and
+   quantisation on the wheel joints, in the firmware's telemetry fields;
+   seeded randomness with byte-identical recordings for a seed (tests, and
+   a golden digest on four CI platforms).
+4. **Met.** TF: link frames plus `map` and `odom` frames in the view (TF
+   toggle); live plots of wheel speeds (measured and target), commanded and
+   actual twist, IMU and estimator errors; CSV export (the recording, below).
+   A separate TF tree panel was not built: the kinematic tree panel shows
+   the URDF part of it.
+5. **Met.** Every panel, plot, HUD, export, CLI report and summary file
+   says "simulated" / "simulation output".
+6. **Met.** Worlds: editable floor plan with walls, boxes and cylinders at
+   their heights, lidar-slam-lab's office, warehouse and loop maps plus a lab
+   and an empty room bundled, saved in the link and in the robot document.
+7. **Met.** Estimators through the vendored lidar-slam-lab modules: wheel
+   odometry (the firmware's), odometry + scan matching with the occupancy
+   grid built from that estimate, MCL; live current and RMS error against
+   the truth; the map drawn in 3D and exported as PGM/YAML.
+8. **Met.** Headless CLI `robot-studio sim robot.urdf --world office --route
+demo --seconds 60 --seed 1 --out run/` writing trajectory CSV, LiDAR
+   scans, IMU, encoder telemetry in encoder-odometry-firmware's field layout,
+   odometry in odobridge's CSV layout, joint states, the map and a summary
+   JSON; byte-identical for the same seed (test and CI).
+9. **Met.** Recording format documented with its mapping to `/scan`,
+   `/imu`, `/odom`, `/joint_states`, `/tf` and `/tf_static` for the bag export
+   in milestone 4.
+10. **Met (lower priority).** Depth camera point cloud at the link tagged
+    `depth_camera`, against the floor and obstacles at their heights;
+    geometry only, not recorded.
+11. **Met.** Cross-checks in CI: simulated wheel speeds equal
+    mecanum-kinematics' `inverse_saturated()` (ideal wheels 4.9e-12 rad/s,
+    PI model after 3 s 6.1e-4 rad/s); every telemetry frame equals
+    encoder-odometry-firmware's Python model (counts exact, speeds 4.9e-11
+    rad/s); the estimators reproduce lidar-slam-lab's CLI benchmark exactly
+    (18 of 18 rows).
+12. **Met.** Performance measured: 0.6 to 1.2 ms per 10 ms step on the CI
+    runners and on the development machine (CLI); in the page 60 fps (the
+    display's rate) in a visible Edge window with the GPU on the development
+    machine, 12.7 to 14 fps in headless Edge and 9.7 to 14.3 fps in headless
+    Chrome on CI, both rendering with SwiftShader (full table in
+    [simulation.md](simulation.md#performance)).
+
+Not done (moved on): a TF tree panel separate from the kinematic tree;
+more than one LiDAR; noise and recording for the depth camera; an
+omnidirectional motion model for MCL (upstream request).
 
 ## Milestone 4: ROS 2
 
-Connect to a real robot or replay a recorded one.
+Connect to a real robot or replay a recorded one, with the same views the
+simulation has. Milestone 3's recording format is the bridge: a bag
+becomes the same streams, and a simulated run becomes a bag.
 
 Acceptance criteria:
 
-1. rosbridge v2 client (JSON over WebSocket) written from the protocol
-   specification: subscribe `/joint_states`, `/tf`, `/tf_static`, `/scan`,
-   `/imu`, `/odom`; publish `/cmd_vel` with a dead-man switch and a speed
-   limit; read `robot_description` from the parameter or topic.
-2. Tested against a fake rosbridge server in CI (recorded message
-   fixtures), including reconnects and malformed messages.
-3. Bag replay companion: a small Python tool using rosbag-inspect that
-   converts a ROS 2 bag into a timeline file the studio plays back with the
-   same views as a live connection (test on a bag fixture).
-4. Hardware tier: the owner's MentorPi (ROS 2 Humble, mecanum, LiDAR, IMU,
-   depth camera, encoders) connected once over rosbridge, or a bag recorded
-   from it, with the date, commit and what was observed recorded in the
-   README. Until that happens the hardware tier stays empty.
+1. **rosbridge live view**: a rosbridge v2 client (JSON over WebSocket)
+   written from the protocol specification; subscribe `/joint_states`,
+   `/tf`, `/tf_static`, `/scan`, `/imu`, `/odom`; read `robot_description`
+   from the parameter or topic; show them with the simulation's 3D layers,
+   plots and HUD (labelled live, not simulated).
+2. **cmd_vel**: publish `geometry_msgs/Twist` on `/cmd_vel` from the same
+   keyboard, gamepad and touch teleop, with a dead-man switch (commands stop
+   when the key, stick or page focus is released), a speed limit no higher
+   than the robot's wheel limit, and a visible "driving a real robot" state.
+3. **Tested against a fake rosbridge server** in CI (recorded message
+   fixtures), including reconnects, malformed messages and the dead-man
+   switch.
+4. **Bag export**: write a simulated run as a ROS 2 bag (MCAP) with the
+   topic mapping in [simulation.md](simulation.md#recording-format-and-the-ros-2-bag-mapping),
+   checked by reading it back with rosbag-inspect and with `ros2 bag info`
+   in `ros:humble-ros-base` in CI.
+5. **Bag import**: a small Python companion using rosbag-inspect converts a
+   ROS 2 bag into the recording format, and the studio replays it through
+   the same estimators and views. This closes the rosbag-inspect →
+   LiDAR adapter gap from the ecosystem audit (findings #20 and #27:
+   rosbag-inspect's `export` drops LaserScan arrays and writes inf as text;
+   lidar-slam-lab takes no scan input and no mount pose): the adapter keeps
+   the arrays and turns inf, NaN and out-of-range values into "no return".
+   Test on a bag fixture.
+6. **Simulation vs robot**: the same command schedule on the simulator and
+   (from a bag) on the robot, compared through the firmware's telemetry
+   fields the simulator already writes.
+7. **Hardware tier**: the owner's MentorPi (ROS 2 Humble, mecanum, LiDAR,
+   IMU, depth camera, encoders) connected once over rosbridge, or a bag
+   recorded from it, with the date, commit and what was observed recorded in
+   the README. Until that happens the hardware tier stays empty.
 
 ## Milestone 5: Release polish
 

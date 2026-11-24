@@ -4,6 +4,68 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-11-24
+
+Milestone 3, "simulation". Validation: software tests; simulation results
+are model output, labelled simulated everywhere; no hardware results.
+
+### Added
+
+- Simulation of the open or built robot (`src/core/sim/`, details in
+  [docs/simulation.md](docs/simulation.md)): mecanum (four wheels) or
+  differential (two) detected from the URDF by the vendored urdf-inspector;
+  fixed 10 ms steps; deterministic for a seed.
+- Drive mirrored from encoder-odometry-firmware v0.1.0: inverse kinematics,
+  direction-preserving saturation, blended velocity estimator, per-wheel
+  PI with feed-forward, anti-windup and slew limit, watchdog, SE(2) wheel
+  odometry; its Python model's motor and exact-edge encoder plant; optional
+  wheel slip and wheel radius error; ideal-wheel mode.
+- Sensors at the URDF's sensor links (poses from forward kinematics): 2D
+  LiDAR with lidar-slam-lab's ray caster against obstacles taller than the
+  scan plane, minimum range and rate; IMU with gravity, rotation rate and
+  centripetal acceleration and an error model from imu-calibration-lab's
+  JSON export, Gazebo noise or defaults; 4x encoders; a depth camera point
+  cloud. Gazebo `<sensor>` tags set LiDAR and IMU parameters.
+- Estimators through the vendored lidar-slam-lab v0.1.0 modules: wheel
+  odometry, odometry + scan matching with the occupancy grid built from the
+  estimate, MCL; live and RMS errors against the truth.
+- Worlds with heights (walls, boxes, cylinders): lidar-slam-lab's office,
+  warehouse and loop, a lab and an empty room; a top-down world editor;
+  worlds, routes and settings kept in the link and in the robot document
+  (undoable `setSimulation` operation).
+- Simulate panel: run, pause, reset, speed, routes (demo autopilot, square,
+  spin), keyboard / gamepad / touch teleop; 3D layers for LiDAR rays and
+  returns, the map, trajectories, MCL particles, the depth cloud and
+  map/odom frames; following camera; HUD with errors, frame rate and
+  measured step time; live plots of wheel speeds, twist, IMU and errors;
+  recording download.
+- CLI `robot-studio sim <robot|template>` with `--world`, `--route`,
+  `--seconds`, `--seed`, `--out`, `--imu-cal`, `--set`, `--ideal`, `--json`:
+  trajectory, LiDAR scans, IMU, the firmware's WHEEL_STATE and ODOMETRY
+  telemetry, joint states, map and summary; byte-identical for a seed.
+- Recording format with its planned mapping to ROS 2 topics (`/scan`,
+  `/imu`, `/odom`, `/joint_states`, `/tf`, `/tf_static`).
+- Tests against analytic results (IK/FK, strafe, saturation, encoder counts,
+  IMU at rest and turning, LiDAR ranges, sensor poses), the estimator
+  wrapper against lidar-slam-lab's own loop, determinism and a golden
+  digest on every CI platform.
+- CI: simulated wheel speeds against mecanum-kinematics'
+  `inverse_saturated()`; every telemetry frame against
+  encoder-odometry-firmware's Python model (new job); the estimators against
+  lidar-slam-lab's CLI benchmark (new job, 18 of 18 rows identical); CLI
+  determinism; a browser scenario that drives the mecanum and differential
+  templates and checks movement, errors and plots.
+
+### Changed
+
+- lidar-slam-lab v0.1.0 is vendored next to urdf-inspector, with the same
+  hash manifest and CI check.
+- The browser smoke script waits for a new template robot correctly (it
+  used to wait until its timeout), brings its tab to the front, and can use
+  the GPU in a visible window (`--headed --gpu`). On Windows it now ends every
+  browser process started with its profile directory; before, Edge's
+  renderer and software-rendering GPU processes outlived each run.
+
 ## [0.2.0] - 2026-11-24
 
 Milestone 2, "builder". Validation: software tests only; no simulation or

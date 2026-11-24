@@ -421,28 +421,35 @@ real robot.
 
 ## Performance
 
-Measured, not estimated; the CLI prints its step time on every run.
+Measured, not estimated; the CLI prints its step time on every run and the
+HUD shows the page's. "Frame" is the main-thread time of one animation
+frame in the page (simulation steps, scene update and draw calls, not the
+GPU's own time).
 
-| Where                                                                                   | Step time (10 ms of simulated time)                                                                                                 | Frame rate                                          |
-| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| Node 25, development machine (Windows 11, 12 logical cores), CLI, mecanum, office, 60 s | 1.2 to 3.9 ms across runs (the machine had other load); 1.16 to 2.07 ms in the 15 full-route cross-check runs                       |                                                     |
-| Node 24, GitHub Actions Ubuntu runner, CLI                                              | 1.0 ms (diff, lab), 1.2 ms (mecanum, office), 0.6 ms (TurtleBot3, 5 Hz LiDAR); 1.08 ms over the full office route (cross-check job) |                                                     |
-| Node 24, GitHub Actions Windows runner, CLI                                             | 0.7 to 1.4 ms                                                                                                                       |                                                     |
-| Edge, visible window, development machine (Radeon RX 570, D3D11), mecanum, lab, 2x      | 4.0 ms in the page                                                                                                                  | 39 fps (61 fps for the page without the simulation) |
-| Headless Edge, SwiftShader, development machine                                         | 2.0 to 4.0 ms in the page                                                                                                           | 4 to 6 fps (see below)                              |
-| Headless Chrome, SwiftShader, GitHub Actions Ubuntu runner (CI browser job)             | 1.5 to 2.0 ms in the page                                                                                                           | 9.7 fps (mecanum, office, 2x), 14.3 fps (diff, lab) |
+| Where                                                                                         | Step time (10 ms of simulated time)                                                                                                                                    | Frame rate                                                               |
+| --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Node 25, development machine (Windows 11, 12 logical cores), CLI, 60 s / 20 s runs            | 1.21 to 1.24 ms (mecanum, office, three runs), 1.06 ms (diff, lab), 0.65 ms (TurtleBot3, loop, 5 Hz LiDAR); 1.16 to 2.07 ms over the 15 full routes of the cross-check |                                                                          |
+| Node 24, GitHub Actions Ubuntu runner, CLI                                                    | 1.2 ms (mecanum, office), 1.0 ms (diff, lab), 0.6 ms (TurtleBot3); 1.08 ms over the full office route (cross-check job)                                                |                                                                          |
+| Node 24, GitHub Actions Windows runner, CLI                                                   | 0.7 to 1.4 ms                                                                                                                                                          |                                                                          |
+| Edge, visible window, development machine (Radeon RX 570, D3D11), mecanum, office, 1440 × 900 | 1.3 ms (1x), 1.5 ms (2x) in the page                                                                                                                                   | 60 fps (the display's rate) at 1x and 2x; frame 3.4 ms (1x), 7.1 ms (2x) |
+| Headless Edge, SwiftShader (CPU rendering), development machine, same scene                   | 2.7 ms in the page                                                                                                                                                     | 12.7 fps (1x), 14 fps (2x); 9.8 fps at 1920 × 1080; frame 23 to 42 ms    |
+| Headless Chrome, SwiftShader, GitHub Actions Ubuntu runner (CI browser job)                   | 1.5 to 2.0 ms in the page                                                                                                                                              | 9.7 fps (mecanum, office, 2x), 14.3 fps (diff, lab)                      |
 
 The step time includes the LiDAR scan and the estimator update every tenth
-step (scan matching and 300-particle MCL are most of it). At these costs
-the simulation runs 3 to 15 times faster than real time. Headless browsers
-here render with SwiftShader on the CPU and deliver few animation frames
-(on this machine even a page that draws nothing got 3 to 6 per second), so
-the headless frame rates are not a measure of the page; one visible-window
-run with the GPU gave the 39 fps above. Another visible-window run, with
-the window not in front, got 2 fps: frame rates depend on the browser's
-throttling as much as on the page. A low frame rate does not change the
-results: the simulation advances in fixed steps, up to 0.25 s of simulated
-time per frame.
+step (scan matching and 300-particle MCL are most of it), so the simulation
+runs 7 to 15 times faster than real time in Node. In a browser with a GPU
+the page keeps the display's frame rate; the headless numbers are for CPU
+rendering with SwiftShader, as CI and the screenshots use it. A low frame
+rate does not change the results: the simulation advances in fixed steps,
+up to 0.25 s of simulated time per frame.
+
+An earlier round of browser measurements on the development machine (2 to
+6 fps headless, 39 fps in a window) was taken while dozens of headless
+browser processes from earlier test runs were still running: on Windows,
+Edge hands over to a new browser process, and the smoke script's kill left
+it and its software-rendering GPU process alive. Those numbers were
+discarded; the script now ends every process started with its profile
+directory, and the table above was measured afterwards.
 
 ## Limitations
 

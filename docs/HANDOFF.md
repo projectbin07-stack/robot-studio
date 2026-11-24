@@ -1,8 +1,8 @@
 # Handoff
 
-State of Robot Studio after milestone 2 (v0.2.0), for whoever builds
-milestone 3. Read [decisions.md](decisions.md) first, then
-[builder.md](builder.md).
+State of Robot Studio after milestone 3 (v0.3.0), for whoever builds
+milestone 4. Read [decisions.md](decisions.md) first, then
+[builder.md](builder.md) and [simulation.md](simulation.md).
 
 ## Status
 
@@ -15,10 +15,17 @@ milestone 3. Read [decisions.md](decisions.md) first, then
   mecanum-kinematics TOML / ROS 2 package exports, autosave, CLI `new`,
   `export`, `templates`. Status of each acceptance criterion in
   [ROADMAP.md](ROADMAP.md#milestone-2-builder-v020-done).
-- Validation: software tests only. Simulation: not applicable yet.
-  Hardware: none.
-- urdf-inspector is vendored at **v0.1.1** (commit in
-  `vendor/manifest.json`), three.js at **0.187.0**.
+- Milestone 3 scope is implemented: simulation of the open robot (mecanum
+  or differential, detected from the URDF) with the drive mirrored from
+  encoder-odometry-firmware, LiDAR / IMU / encoders / depth point cloud at
+  the URDF's sensor frames, wheel odometry, scan matching and MCL from
+  lidar-slam-lab, worlds with heights and an editor, live 3D layers, plots,
+  HUD and teleop, a deterministic CLI recording. Status of each criterion in
+  [ROADMAP.md](ROADMAP.md#milestone-3-simulation-v030-done).
+- Validation: software tests; simulation (model output, labelled
+  simulated); hardware none.
+- Vendored: urdf-inspector **v0.1.1**, lidar-slam-lab **v0.1.0** (commits in
+  `vendor/manifest.json`), three.js **0.187.0**.
 
 ## Module map
 
@@ -51,6 +58,20 @@ src/core/                      DOM-free, tested in Node, coverage-gated
   builder/drive.js             mecanum TOML (urdf-inspector) and IK/FK from measured wheels
   builder/export.js            xacro export, ROS 2 package files and zip
   builder/storage.js           autosave format
+  sim/se2.js                   SE(2) exp/log/compose (the firmware's odometry maths)
+  sim/firmware.js              encoder-odometry-firmware mirrored: IK, saturation, velocity estimator, PI, watchdog, odometry
+  sim/plant.js                 motor + gearbox per wheel, exact encoder edges (the firmware's Python plant)
+  sim/robot.js                 simRobot(): drive kind, wheel geometry, sensor mounts from FK, Gazebo tags, footprint
+  sim/world.js                 worlds with heights, bundled worlds, JSON and link encodings
+  sim/imu.js                   IMU error model, imu-calibration-lab JSON and Gazebo noise import
+  sim/depth.js                 depth camera point cloud
+  sim/estimators.js            wheel odometry + scan matching + MCL over lidar-slam-lab, virtual scans
+  sim/reference.js             lidar-slam-lab's own experiment through the wrapper (cross-check)
+  sim/sim.js                   the fixed-step loop: createSim(), step()
+  sim/routes.js                demo (autopilot), square, spin, none
+  sim/settings.js              defaults, limits, normalizeSettings(), settingsDiff()
+  sim/record.js                recording files and summary.json
+  sim/session.js               the page's real-time session: fixed steps, teleop, plot histories
 src/ui/                        browser only (not coverage-gated)
   app.js                       DOM wiring, panels, selection, URL updates, builder session
   builder.js                   template form and properties panel (DOM only)
@@ -58,16 +79,23 @@ src/ui/                        browser only (not coverage-gated)
   meshes.js                    STL/OBJ/DAE loading from the VFS, textures via blob URLs
   files.js                     drop / file input / folder input -> VirtualFs
   state.js                     URL <-> page state (DOM-free, tested)
+  simui.js                     Simulate panel, HUD, plots, teleop, frame loop
+  simview.js                   the simulation in 3D: world, LiDAR, map, trails, particles, cloud, frames
+  plots.js                     canvas time plots
+  worldedit.js                 top-down world editor
 src/node/nodefs.js             real-file-system XacroFs for the CLI and tests
 src/cli.js, bin/robot-studio.js  CLI
+src/simcli.js                  the `sim` command
 vendor/                        vendored code + manifest.json (never edit)
 examples/studio_mecanum/       our illustrative model (4 xacro files, STL + OBJ)
 examples/third_party/          TurtleBot3, urdf_tutorial, ros2_control_demos (unmodified, with licences)
 tests/                         node:test suites; tests/corpus = golden corpus
 tests/corpus/builder/          exported template files (xacro, URDF, TOML, reference speeds)
 tests/builder-cases.js         which template cases are exported there
+tests/corpus/sim/              simulator fixtures for CI cross-checks, golden digest, a test world
 scripts/                       vendor.mjs, xacro_golden.py, browser-smoke.mjs, serve.js, generators,
-                               builder-fixtures.js, mecanum_interop.py, ros2_package_check.sh
+                               builder-fixtures.js, mecanum_interop.py, ros2_package_check.sh,
+                               sim-fixtures.js, firmware_interop.py, lsl-crosscheck.mjs
 ```
 
 ## How to run everything
@@ -99,6 +127,14 @@ node scripts/builder-fixtures.js --check   # what CI runs
 # then regenerate the goldens on Linux (roller positions use sin/cos, last bit differs on Windows)
 PYTHONPATH=../mecanum-kinematics/src python scripts/mecanum_interop.py   # CI installs mecanum-kinematics v0.1.0
 node bin/robot-studio.js new mecanum -f package -o pkg.zip   # CI builds such zips with colcon in ros:humble-ros-base
+
+# simulation
+node bin/robot-studio.js sim mecanum --world office --route demo --seconds 60 --seed 1 --out run/
+node scripts/sim-fixtures.js [--check]       # fixtures for the cross-checks and the golden digest
+PYTHONPATH=../encoder-odometry-firmware/host/src python scripts/firmware_interop.py   # CI installs odobridge v0.1.0
+node scripts/lsl-crosscheck.mjs --lsl ../lidar-slam-lab [--seeds 5] [--full-seeds 1]  # about 15 min locally
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --sim --sim-world lab --screenshot sim.png
+node scripts/browser-smoke.mjs ... --headed --gpu   # visible window with the GPU, for frame rates
 ```
 
 On this development machine: work only on D:, set
@@ -114,26 +150,56 @@ taken.
   `src/core/examples.js` (a test fails for unlisted or missing files), add
   the expected link count to `tests/model.test.js` and a line to the CI
   browser job.
-- A new upstream module (lidar-slam-lab in milestone 3): add a `git` entry
-  to `SOURCES` in `scripts/vendor-lib.js` with the files needed, run
-  `node scripts/vendor.mjs`, import from `vendor/lidar-slam-lab/src/...`.
+- A new upstream module or file: add it to `SOURCES` in
+  `scripts/vendor-lib.js` (lidar-slam-lab's files are the `LIDAR_SLAM` list),
+  run `node scripts/vendor.mjs`, import from `vendor/<name>/...`.
+- A world: add it to `WORLDS` in `src/core/sim/world.js` (the tests
+  round-trip every bundled world).
 
-## Milestone 3 starting points
+## Milestone 4 starting points
 
-- The robot to simulate is a `RobotDoc`; sensors are links with `sensor`
-  set (`lidar2d`, `imu`, `camera`, `depth_camera`). Simulation
-  parameters (LiDAR range, IMU noise) belong in new optional fields of the
-  document, not in the URDF.
-- Wheel geometry: `editor.model.report.context.wheels` (urdf-inspector's
-  `measureWheels`), and `mecanumInverse` / `mecanumForward` in
-  `src/core/builder/drive.js` (cross-checked against mecanum-kinematics in
-  CI). A differential model with the same conventions is the next piece.
-- Joint positions drive the view through `view.setPose(q)`; a simulation
-  loop can update `state.q` and a base pose (the view has no world offset
-  for the root yet: add one in `view3d.js`).
-- lidar-slam-lab is vendored the same way as urdf-inspector (decision 2).
+- The recording format and its topic mapping are in
+  [simulation.md](simulation.md#recording-format-and-the-ros-2-bag-mapping);
+  `src/core/sim/record.js` writes it. A bag importer should produce the same
+  streams so the estimators and views run on recorded data unchanged
+  (`estimators.js` takes an odometry delta, a scan and a mount).
+- `SimSession` (`src/core/sim/session.js`) is the shape a live session
+  should have too: something that advances, a snapshot for the view, plot
+  histories. `simview.js` draws from a session; a rosbridge session can
+  feed the same layer.
+- Teleop (`manual()` in `simui.js`) already produces a body twist with speed
+  limits from the robot's wheels: the input side of `/cmd_vel`. Add the
+  dead-man switch before sending anything to a real robot.
+- The firmware's telemetry fields are in the recording, so a bag from the
+  MentorPi (or odobridge's CSV) can be compared with a simulated run of the
+  same commands.
+- Headless browsers render with SwiftShader (10 to 14 fps); the browser job
+  checks simulated seconds and errors, not frame rate. On Windows the smoke
+  script ends every browser process started with its profile directory (Edge
+  hands over to a new process that a plain kill leaves running).
+
+## How the simulation hangs together
+
+- The robot is the open model plus its `RobotDoc` (builder) or the model
+  imported as a document (viewer): `simRobot(model, doc)`. Sensor tags and
+  Gazebo extras come from the document; geometry from urdf-inspector's
+  report. Simulation settings live in `doc.sim` (setSimulation operation)
+  and in the link (`sim`, `w`, `r`, `ss`).
+- The 3D view places the model's root frame with `view.setBase(matrix)` and
+  turns the wheels with `view.setPose(q)`; `view.holdRender` lets the frame
+  loop draw once per animation frame.
+- Determinism: one seeded stream per noise source. Adding a random draw to
+  an existing stream changes every later number and the golden digest in
+  `tests/corpus/sim/golden-digest.json`; regenerate it with
+  `node scripts/sim-fixtures.js` only after checking why it changed.
+- Changing the drive or firmware mirror: regenerate the fixtures and run
+  `scripts/firmware_interop.py` and `scripts/mecanum_interop.py`.
 
 ## Known issues
+
+- Simulation: see [simulation.md](simulation.md#limitations) (2D motion only,
+  one LiDAR, lidar-slam-lab's MCL motion model has no heading bias and reads
+  a strafe as two rotations, scan matching has no loop closure).
 
 - `xacro.load_yaml` is not implemented (no YAML reader); descriptions that
   need it stop with a clear error.
