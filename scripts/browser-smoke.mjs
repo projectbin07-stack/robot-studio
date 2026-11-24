@@ -287,6 +287,8 @@ try {
   if (values.builder) report.builder = builder;
   if (values.sim) report.sim = sim;
   if (values.screenshot) {
+    // On a phone the 3D view is at the top of the page; scenarios may have scrolled away from it.
+    if (values.mobile) await evaluate("window.scrollTo(0, 0)");
     const shot = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
     writeFileSync(values.screenshot, Buffer.from(shot.data, "base64"));
     report.screenshot = values.screenshot;
