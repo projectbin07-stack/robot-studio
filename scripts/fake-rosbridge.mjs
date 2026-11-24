@@ -313,6 +313,13 @@ export class FakeServer {
     run();
   }
 
+  /** Stop sending fixture messages (and do not restart on new subscriptions). */
+  stopReplay() {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    this.opts.fixture = [];
+  }
+
   /** @param {string} text */
   broadcast(text) {
     for (const c of this.conns) c.send(text);

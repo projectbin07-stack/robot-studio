@@ -297,7 +297,23 @@ test("live view against the fake server: subscriptions, TF, scans, joints, robot
     assert.ok(f.trails.odom && f.trails.est, "odometry and scan matching run on the live data");
     assert.ok(Object.keys(f.q).includes("front_left_wheel_joint"));
     assert.ok(live.history.wheels.length > 0);
-    // robot_description, by topic and through rosapi.
+    // robot_description, by topic and through rosapi. The replay is stopped first and
+    // the client given time to drain it: on loaded Linux CI runners a reply sent while
+    // the replay was streaming was not seen within 20 s (see docs/HANDOFF.md).
+    s.stopReplay();
+    let seen = client.stats.received;
+    let since = Date.now();
+    await waitFor(
+      () => {
+        if (client.stats.received !== seen) {
+          seen = client.stats.received;
+          since = Date.now();
+        }
+        return Date.now() - since > 300;
+      },
+      15000,
+      "the replay to drain",
+    );
     assert.equal(urdfs[0], DESCRIPTION);
     assert.equal(await live.requestDescription(undefined, 20000), DESCRIPTION);
     await assert.rejects(
