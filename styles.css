@@ -924,11 +924,21 @@ details.sub > summary {
   margin-top: 2px;
 }
 
-.toolbar.sim-layers {
-  top: auto;
-  bottom: 30px;
-  right: auto;
-  max-width: calc(100% - 290px);
+fieldset.layers {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 8px 0;
+  padding: 4px 8px 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  font-size: 12.5px;
+}
+
+fieldset.layers legend {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 0 4px;
 }
 
 .sticks {
@@ -984,12 +994,6 @@ details.sub > summary {
 }
 
 @media (max-width: 760px) {
-  .toolbar.sim-layers {
-    max-width: none;
-    right: 10px;
-    bottom: auto;
-    top: 48px;
-  }
   .sim-hud {
     bottom: 8px;
   }

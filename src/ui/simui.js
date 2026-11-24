@@ -400,7 +400,6 @@ export function initSim(host) {
     $("sim-controls").hidden = !state.sim;
     $("sim-open").hidden = state.sim;
     $("sim-hud").hidden = !on;
-    $("sim-layers").hidden = !on;
     $("sticks").hidden = !on;
     $("p-plots").hidden = !on;
     document.body.classList.toggle("simulating", on);

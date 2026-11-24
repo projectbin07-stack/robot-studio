@@ -117,6 +117,16 @@
                 Drive by hand at any time: W/S or arrows forward and back, A/D turn, Q/E strafe
                 (mecanum), Space stop; a gamepad's sticks; or the on-screen sticks.
               </p>
+              <fieldset class="layers" id="sim-layers">
+                <legend>Show</legend>
+                <label><input type="checkbox" data-layer="rays" checked /> LiDAR</label>
+                <label><input type="checkbox" data-layer="map" checked /> Map</label>
+                <label><input type="checkbox" data-layer="trails" checked /> Trajectories</label>
+                <label><input type="checkbox" data-layer="particles" /> Particles</label>
+                <label><input type="checkbox" data-layer="cloud" checked /> Depth cloud</label>
+                <label><input type="checkbox" data-layer="tf" /> TF frames</label>
+                <label><input type="checkbox" data-layer="follow" checked /> Follow robot</label>
+              </fieldset>
               <details class="sub" id="sim-world-editor">
                 <summary>Edit the world</summary>
                 <div class="seg tools" role="group" aria-label="World tool">
@@ -243,23 +253,6 @@
           </div>
           <table id="hud-errors"></table>
           <div class="hud-perf" id="hud-perf"></div>
-        </div>
-        <div
-          class="toolbar sim-layers"
-          id="sim-layers"
-          role="toolbar"
-          aria-label="Simulation layers"
-          hidden
-        >
-          <label class="toggle"><input type="checkbox" data-layer="rays" checked /> LiDAR</label>
-          <label class="toggle"><input type="checkbox" data-layer="map" checked /> Map</label>
-          <label class="toggle"
-            ><input type="checkbox" data-layer="trails" checked /> Trajectories</label
-          >
-          <label class="toggle"><input type="checkbox" data-layer="particles" /> Particles</label>
-          <label class="toggle"><input type="checkbox" data-layer="cloud" checked /> Depth</label>
-          <label class="toggle"><input type="checkbox" data-layer="tf" /> TF</label>
-          <label class="toggle"><input type="checkbox" data-layer="follow" checked /> Follow</label>
         </div>
         <div class="sticks" id="sticks" hidden>
           <div class="stick" id="stick-move" title="Drive: forward, back and sideways">
