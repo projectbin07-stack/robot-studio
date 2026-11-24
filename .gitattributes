@@ -6,3 +6,5 @@
 # Vendored and third-party files are kept byte-for-byte as published upstream.
 vendor/** -text
 examples/third_party/** -text
+*.mcap binary
+*.db3 binary
