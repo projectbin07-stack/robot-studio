@@ -59,7 +59,9 @@ test("rosbridge URL: ws/wss only, no credentials, port completed, mixed-content 
   const c = checkRosbridgeUrl("ws://192.168.1.20:9090", "https:");
   assert.ok(c.ok && /mixed content/.test(c.warnings[0]));
   const d = checkRosbridgeUrl("ws://localhost:9090", "https:");
-  assert.ok(d.ok && d.warnings.length === 0);
+  assert.ok(d.ok && /local network access/.test(d.warnings[0]));
+  const e = checkRosbridgeUrl("ws://127.0.0.1:9090", "http:");
+  assert.ok(e.ok && e.warnings.length === 0);
   for (const [bad, why] of /** @type {[string, RegExp][]} */ ([
     ["", /enter the rosbridge address/],
     ["http://robot:9090", /only ws:\/\/ and wss:\/\//],

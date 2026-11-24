@@ -198,15 +198,18 @@ export function initRos(host) {
       WebSocket: /** @type {any} */ (window.WebSocket),
     });
     const c = client;
+    const warn = check.warnings.map((w) => ` Warning: ${w}.`).join("");
     c.onState((st, detail) => {
       d.ros = st;
       if (st === "open") {
         setStatus(`LIVE: connected to ${check.host}. Showing the robot's own data.`);
         $("ros-live").hidden = false;
       } else if (st === "reconnecting")
-        setStatus(`Connection lost (${detail}); reconnecting to ${check.host}. Driving is off.`);
-      else if (st === "connecting") setStatus(`Connecting to ${check.host}`);
-      else if (st === "closed") setStatus(`Not connected (${detail}).`);
+        setStatus(
+          `Connection lost (${detail}); reconnecting to ${check.host}. Driving is off.${warn}`,
+        );
+      else if (st === "connecting") setStatus(`Connecting to ${check.host}${warn}`);
+      else if (st === "closed") setStatus(`Not connected (${detail}).${warn}`);
       updateDrive();
     });
     c.onLog((level, text) => {
@@ -219,7 +222,7 @@ export function initRos(host) {
     });
     $("ros-connect").hidden = true;
     $("ros-disconnect").hidden = false;
-    for (const w of check.warnings) setStatus(`Warning: ${w}.`);
+
     mode = "live";
     badge("live", "LIVE: real robot", "live");
     layer.clearWorld(10);

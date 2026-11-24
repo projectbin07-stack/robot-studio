@@ -47,6 +47,10 @@ export function checkRosbridgeUrl(input, pageProtocol = "") {
   if (!hasScheme && !u.port) u.port = String(DEFAULT_PORT);
   /** @type {string[]} */
   const warnings = [];
+  if (pageProtocol === "https:" && isLoopback(u.hostname))
+    warnings.push(
+      "a public https page reaching this computer is blocked by Chromium-based browsers unless you allow local network access when asked (headless Edge blocked it: ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS); if the connection fails, open the studio from a local server (node scripts/serve.js, docs/ros2.md)",
+    );
   if (pageProtocol === "https:" && u.protocol === "ws:" && !isLoopback(u.hostname))
     warnings.push(
       "this page is served over https, so the browser blocks unencrypted ws:// connections to other machines (mixed content); open the studio from a local server (npm run serve) or use wss:// (docs/ros2.md)",

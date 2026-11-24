@@ -73,8 +73,15 @@ to other machines (mixed content); only `ws://localhost` / `127.0.0.1` is
 allowed. To reach a robot, either open the studio from a local copy over
 http (`node scripts/serve.js`, below), or give rosbridge_server a certificate
 and use `wss://` (its `ssl`, `certfile` and `keyfile` launch arguments).
-Chrome's Private Network Access rules may still block a public https page
-from reaching a private address; the local copy avoids both.
+Chromium-based browsers also block a public https page from reaching
+local or private addresses (Local Network Access) unless the user allows it
+when asked: from the live site, headless Edge refused even
+`ws://127.0.0.1:9090` (`net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`),
+and the page warns about this. The local copy avoids both checks. (The
+screenshots of the live view were taken from the live site with that check
+turned off in the headless browser, `--allow-local-network` in
+`scripts/browser-smoke.mjs`, connected to the fake server on the same
+machine.)
 
 ## Driving: cmd_vel and the dead-man switch
 
