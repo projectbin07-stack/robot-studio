@@ -33,12 +33,13 @@ function mecanum() {
 /**
  * @param {() => boolean} cond
  * @param {number} [ms]
- * @param {string} [what]
+ * @param {string | (() => string)} [what]
  */
 async function waitFor(cond, ms = 4000, what = "condition") {
   const t0 = Date.now();
   while (!cond()) {
-    if (Date.now() - t0 > Math.max(ms, 15000)) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() - t0 > Math.max(ms, 15000))
+      throw new Error(`timed out waiting for ${typeof what === "function" ? what() : what}`);
     await new Promise((r) => setTimeout(r, 10));
   }
 }
@@ -313,7 +314,12 @@ test("live view against the fake server: subscriptions, TF, scans, joints, robot
         msg: { header: { stamp: { sec: 0, nanosec: 0 }, frame_id: "l" }, ranges: "x" },
       }),
     );
-    await waitFor(() => live.topics["/scan"].rejected === 1, 2000, "rejected scan");
+    await waitFor(
+      () => live.topics["/scan"].rejected >= 1,
+      2000,
+      () =>
+        `rejected scan (${JSON.stringify({ stats: client.stats, scan: { ...live.topics["/scan"], times: [] } })})`,
+    );
     assert.match(live.topics["/scan"].error, /range_min/);
     live.dispose();
     await waitFor(

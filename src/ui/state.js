@@ -20,6 +20,7 @@ import { EXAMPLES } from "../core/examples.js";
  * @property {string} world bundled world id or encoded world (core/sim/world.js encodeWorld)
  * @property {string} route route id
  * @property {Record<string, unknown>} simSettings simulation settings that differ from the defaults
+ * @property {string} ros rosbridge address to pre-fill (never connected to without a click)
  */
 
 /** @returns {PageState} */
@@ -38,6 +39,7 @@ export function defaultState() {
     world: "office",
     route: "demo",
     simSettings: {},
+    ros: "",
   };
 }
 
@@ -74,6 +76,7 @@ export function encodeState(st) {
     if (a.length > 0) p.set("a", a.map(([n, v]) => `${n}:${v}`).join(","));
   }
   if (st.theme !== d.theme) p.set("theme", st.theme);
+  if (st.ros) p.set("ros", st.ros);
   if (st.sim) {
     p.set("sim", "1");
     if (st.world !== d.world) p.set("w", st.world);
@@ -119,6 +122,8 @@ export function decodeState(search) {
     if (/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(name) && ARG_VALUE.test(v)) st.args[name] = v;
   }
   if (p.get("sim") === "1") st.sim = true;
+  const ros = p.get("ros");
+  if (ros && ros.length <= 512) st.ros = ros;
   const w = p.get("w");
   if (w && w.length <= 20000) st.world = w;
   const r = p.get("r");

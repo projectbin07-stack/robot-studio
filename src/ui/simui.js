@@ -15,6 +15,9 @@ import { ROUTES, routeSpeeds } from "../core/sim/routes.js";
 import { normalizeSettings, settingsDiff } from "../core/sim/settings.js";
 import { imuModelFromCalibration } from "../core/sim/imu.js";
 import { writeZip } from "../core/zipwrite.js";
+import { parseRecording } from "../core/ros/recording.js";
+import { recordingToBag } from "../core/ros/bag.js";
+import { VERSION } from "../core/version.js";
 import { SimLayer, TRAIL_COLORS } from "./simview.js";
 import { Plot } from "./plots.js";
 import { WorldEditor } from "./worldedit.js";
@@ -243,6 +246,26 @@ export function initSim(host) {
     );
     document.body.dataset.lastExport = a.download;
   });
+  $("sim-download-bag").addEventListener("click", () => {
+    if (!session) return;
+    const r = host.robot();
+    const name = `${session.robot.name}_simulation`.replace(/[^A-Za-z0-9_]/g, "_");
+    const bag = recordingToBag(parseRecording(session.files(r?.label ?? "robot")), {
+      name,
+      library: `robot-studio ${VERSION}`,
+    });
+    const zip = writeZip(Object.entries(bag.files).map(([path, data]) => ({ path, data })));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(
+      new Blob([/** @type {BlobPart} */ (zip)], { type: "application/zip" }),
+    );
+    a.download = `${name}.zip`;
+    a.click();
+    note(
+      `ROS 2 bag of ${session.sim.t.toFixed(1)} simulated seconds: ${bag.messages} messages, ${bag.bytes} bytes of MCAP, labelled simulated (/robot_studio/source). Unzip and run 'ros2 bag info ${name}' (needs ros-humble-rosbag2-storage-mcap); topic mapping in docs/ros2.md.`,
+    );
+    document.body.dataset.lastExport = a.download;
+  });
   input("imu-cal").addEventListener("change", async () => {
     const f = input("imu-cal").files?.[0];
     if (!f) return;
@@ -452,8 +475,10 @@ export function initSim(host) {
     "arrowleft",
     "arrowright",
   ]);
+  /** Another mode (a live robot) that wants the teleop keys. */
+  let externalTeleop = () => false;
   window.addEventListener("keydown", (e) => {
-    if (!session || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!(session || externalTeleop()) || e.ctrlKey || e.metaKey || e.altKey) return;
     const t = /** @type {HTMLElement | null} */ (e.target);
     if (t && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA")) return;
     const k = e.key.toLowerCase();
@@ -501,7 +526,18 @@ export function initSim(host) {
   function manual() {
     if (!session) return null;
     const sp = routeSpeeds(session.robot);
-    const mec = session.robot.drive === "mecanum";
+    const a = axes(session.robot.drive === "mecanum");
+    if (!a) return null;
+    return { vx: a.fx * sp.v, vy: a.fy * sp.v, wz: a.fw * sp.w };
+  }
+
+  /**
+   * Every teleop input combined, each axis in [-1, 1]; all zero while Space
+   * is held; null when nothing is held.
+   * @param {boolean} mec strafing allowed
+   * @returns {{ fx: number, fy: number, fw: number } | null}
+   */
+  function axes(mec) {
     let fx = 0;
     let fy = 0;
     let fw = 0;
@@ -524,9 +560,9 @@ export function initSim(host) {
       fw += -dz(pad.axes[2] ?? 0);
     }
     const c = (/** @type {number} */ v) => Math.max(-1, Math.min(1, v));
-    if (keys.has(" ")) return { vx: 0, vy: 0, wz: 0 };
+    if (keys.has(" ")) return { fx: 0, fy: 0, fw: 0 };
     if (fx === 0 && fy === 0 && fw === 0) return null;
-    return { vx: c(fx) * sp.v, vy: c(fy) * sp.v, wz: c(fw) * sp.w };
+    return { fx: c(fx), fy: c(fy), fw: c(fw) };
   }
 
   // ------------------------------------------------------------ frame loop
@@ -721,6 +757,29 @@ export function initSim(host) {
     },
     get session() {
       return session;
+    },
+    get opened() {
+      return opened;
+    },
+    /** The open robot, as the host gives it. */
+    hostRobot: () => host.robot(),
+    /** Close the simulation (another source takes the view). */
+    close() {
+      if (opened) close();
+    },
+    axes,
+    /** @param {() => boolean} fn the keys drive something else while this returns true */
+    setExternalTeleop(fn) {
+      externalTeleop = fn;
+    },
+    /** Show or hide the on-screen sticks (for a live robot). @param {boolean} on */
+    showSticks(on) {
+      $("sticks").hidden = !on;
+    },
+    /** Forget every held key and stick (the dead-man switch after a blur). */
+    releaseAll() {
+      keys.clear();
+      for (const k of Object.keys(sticks)) sticks[k] = { x: 0, y: 0 };
     },
   };
 }

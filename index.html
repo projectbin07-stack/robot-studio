@@ -171,11 +171,101 @@
               </details>
               <div class="row">
                 <button type="button" id="sim-download">Download recording (.zip)</button>
+                <button type="button" id="sim-download-bag">Download ROS 2 bag (.zip)</button>
               </div>
               <p class="note" id="sim-note" role="status"></p>
               <div class="row">
                 <button type="button" id="sim-close">Close the simulation</button>
               </div>
+            </div>
+          </div>
+        </details>
+        <details class="panel" id="p-ros">
+          <summary>
+            ROS 2 <span class="badge-sim live">live</span>
+            <span class="badge-sim replay">replay</span>
+          </summary>
+          <div class="panel-body">
+            <p class="note">
+              Connect to a robot running rosbridge_server, or replay a recording (a simulated run,
+              or a ROS 2 bag converted with robot-studio-bag). What is shown here comes from the
+              robot or the file, labelled as such; the steps for a real robot are in docs/ros2.md.
+            </p>
+            <h3 class="sub-h">Live robot (rosbridge)</h3>
+            <label class="field"
+              ><span>rosbridge address</span>
+              <input
+                type="text"
+                id="ros-url"
+                placeholder="ws://192.168.1.20:9090"
+                spellcheck="false"
+                autocomplete="off"
+              />
+            </label>
+            <div class="row">
+              <button type="button" id="ros-connect">Connect</button>
+              <button type="button" id="ros-disconnect" hidden>Disconnect</button>
+            </div>
+            <p class="note" id="ros-status" role="status">
+              Not connected. A link can fill in the address but never connects by itself.
+            </p>
+            <div id="ros-live" hidden>
+              <table class="ros-topics" id="ros-topics"></table>
+              <div class="row">
+                <button type="button" id="ros-load-urdf">Use the robot's robot_description</button>
+              </div>
+              <div class="ros-drive" id="ros-drive">
+                <strong>Drive the real robot (/cmd_vel)</strong>
+                <label class="confirm"
+                  ><input type="checkbox" id="ros-drive-confirm" /> I am next to the robot, it has
+                  room to move, and I can stop it by hand. Commands stop when I let go of the keys
+                  or sticks, or leave this page.</label
+                >
+                <label class="field inline"
+                  ><span>Speed limit</span>
+                  <select id="ros-speed">
+                    <option value="0.1">10 % of the wheel limit</option>
+                    <option value="0.25" selected>25 % of the wheel limit</option>
+                    <option value="0.5">50 % of the wheel limit</option>
+                    <option value="1">100 % of the wheel limit</option>
+                  </select>
+                </label>
+                <div class="row">
+                  <button type="button" id="ros-arm">Enable driving</button>
+                  <button type="button" id="ros-disarm" hidden>Stop driving</button>
+                </div>
+                <p class="note" id="ros-drive-state" role="status"></p>
+              </div>
+            </div>
+            <h3 class="sub-h">Replay a recording</h3>
+            <label class="field"
+              ><span>Recording (.zip, or its files)</span>
+              <input type="file" id="ros-replay-file" accept=".zip,.csv,.jsonl,.json" multiple />
+            </label>
+            <div class="row" id="ros-replay-controls" hidden>
+              <button type="button" id="ros-replay-run">Pause</button>
+              <button type="button" id="ros-replay-restart">Restart</button>
+              <label class="field inline"
+                ><span>Speed</span>
+                <select id="ros-replay-speed">
+                  <option value="1" selected>1x</option>
+                  <option value="2">2x</option>
+                  <option value="4">4x</option>
+                  <option value="10">10x</option>
+                </select>
+              </label>
+            </div>
+            <div class="row" id="ros-compare-row" hidden>
+              <button type="button" id="ros-compare">
+                Compare with the simulator (same commands)
+              </button>
+            </div>
+            <p class="note" id="ros-replay-note" role="status"></p>
+            <div class="table-scroll">
+              <table class="ros-topics" id="ros-compare-out" hidden></table>
+            </div>
+            <div class="row">
+              <button type="button" id="ros-close" hidden>Close</button>
             </div>
           </div>
         </details>
@@ -248,9 +338,10 @@
           <label class="toggle"><input type="checkbox" id="opt-com" /> Centre of mass</label>
           <button type="button" id="btn-fit">Fit view</button>
         </div>
+        <div class="drive-banner" id="drive-banner" hidden></div>
         <div class="sim-hud" id="sim-hud" hidden>
           <div class="hud-title">
-            <span class="badge-sim">Simulated</span> <span id="hud-time"></span>
+            <span class="badge-sim" id="hud-badge">Simulated</span> <span id="hud-time"></span>
           </div>
           <table id="hud-errors"></table>
           <div class="hud-perf" id="hud-perf"></div>
@@ -270,7 +361,7 @@
 
       <aside class="side right">
         <details class="panel" id="p-plots" open hidden>
-          <summary>Live plots <span class="badge-sim">simulated</span></summary>
+          <summary>Live plots <span class="badge-sim" id="plots-badge">simulated</span></summary>
           <div class="panel-body plots">
             <canvas id="plot-wheels"></canvas>
             <canvas id="plot-twist"></canvas>

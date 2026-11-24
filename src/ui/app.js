@@ -30,6 +30,7 @@ import { rootLinks } from "../core/builder/document.js";
 import { VirtualFs as EmptyFs } from "../core/vfs.js";
 import { renderProperties, renderTemplateForm } from "./builder.js";
 import { initSim } from "./simui.js";
+import { initRos } from "./rosui.js";
 import { deepEqual } from "../core/builder/document.js";
 
 /** @typedef {import("../core/model.js").LoadedModel} LoadedModel */
@@ -77,6 +78,8 @@ const NO_FILES = new EmptyFs();
 const viewFs = () => (editor ? (editMeshFs ?? NO_FILES) : /** @type {VirtualFs} */ (fs));
 
 const view = new RobotView($("view"), (link) => select(link ? { kind: "link", name: link } : null));
+/** The ROS 2 panel (set up at the end of this module). @type {ReturnType<typeof initRos> | null} */
+let rosUi = null;
 /** The simulation panel (set up at the end of this module). @type {ReturnType<typeof initSim> | null} */
 let simUi = null;
 /** The opened model as an editable document, for the simulator (sensor tags, Gazebo tags). */
@@ -326,6 +329,7 @@ function openModel() {
     document.body.dataset.links = String(m.report?.summary.links ?? 0);
     simUi?.robotChanged();
     simUi?.openFromLink();
+    rosUi?.robotChanged();
   });
 }
 
@@ -937,6 +941,7 @@ async function showEditor(frame, t0 = performance.now()) {
   document.body.dataset.version = String(editor.version);
   simUi?.robotChanged();
   simUi?.openFromLink();
+  rosUi?.robotChanged();
 }
 
 let packageNameEdited = false;
@@ -1085,6 +1090,20 @@ simUi = initSim({
     updateEditUi();
     autosave();
   },
+});
+
+// ---------------------------------------------------------------- ROS 2
+rosUi = initRos({
+  view,
+  state,
+  saveUrl,
+  robot: () => simUi?.hostRobot() ?? null,
+  openUrdf(text, label) {
+    const f = new EmptyFs();
+    f.addText("robot_description/robot.urdf", text);
+    openFiles(f, label);
+  },
+  sim: /** @type {ReturnType<typeof initSim>} */ (simUi),
 });
 
 // ---------------------------------------------------------------- start

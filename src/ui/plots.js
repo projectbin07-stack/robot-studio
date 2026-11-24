@@ -70,7 +70,7 @@ export class Plot {
     }
     if (this.range.min !== undefined) lo = Math.min(lo, this.range.min);
     if (this.range.max !== undefined) hi = Math.max(hi, this.range.max);
-    if (!Number.isFinite(lo)) {
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) {
       lo = -1;
       hi = 1;
     }
