@@ -30,12 +30,6 @@ export const STUDIO_CHECKS = {
     title: "xacro warning or message",
     why: "Deprecated syntax, unknown attributes or xacro.warning() output, reported as xacro reports it.",
   },
-  "mesh-missing": {
-    group: "meshes",
-    severity: "warning",
-    title: "Mesh file not found",
-    why: "RViz and Gazebo show nothing for a mesh they cannot load. Load the package folder (or zip) that contains it.",
-  },
   "file-fallback": {
     group: "files",
     severity: "info",
@@ -178,13 +172,30 @@ export function loadModel(fs, entry, opts = {}) {
     extra.push(studioFinding("file-fallback", "info", n.message, n.path, 0));
 
   model.urdf = serializeXml(root);
-  const { root: xml, files } = toXmlElement(root);
-  const report = inspectXml(xml);
+  // Every element carries the file it came from (XmlElement.source), so
+  // urdf-inspector puts the file on each finding; missing meshes are looked
+  // up through the file system with its meshExists option (mesh-missing).
+  const xml = toXmlElement(root);
+  const report = inspectXml(
+    xml,
+    fs.resolveUri
+      ? {
+          meshExists: (f) => {
+            const r = /** @type {NonNullable<ModelFs["resolveUri"]>} */ (fs.resolveUri).call(
+              fs,
+              f,
+              path,
+            );
+            return r.path ? true : r.reason;
+          },
+        }
+      : {},
+  );
   model.report = report;
-  const fileOf = elementFiles(xml, files, path);
+  const fileOf = elementFiles(xml, path);
   model.sourceOf = fileOf;
   /** @type {StudioFinding[]} */
-  const findings = report.findings.map((f) => ({ ...f, file: fileOf(f.path) }));
+  const findings = report.findings.map((f) => ({ ...f, file: f.source ?? path }));
 
   if (report.robot) {
     for (const link of report.robot.links) {
@@ -203,16 +214,6 @@ export function loadModel(fs, entry, opts = {}) {
             resolved: res.path,
             reason: res.reason,
           });
-          if (!res.path && fs.resolveUri)
-            findings.push({
-              id: "mesh-missing",
-              severity: "warning",
-              message: `${kind} mesh '${s.geometry.filename}' of link '${link.name}' was not found: ${res.reason}`,
-              path: s.path,
-              target: { kind: "link", name: link.name },
-              line: link.line,
-              file: fileOf(s.path),
-            });
         });
       }
     }
@@ -222,23 +223,23 @@ export function loadModel(fs, entry, opts = {}) {
 }
 
 /**
- * Map a finding path to the file its top-level element came from.
+ * Map an element path to the file its top-level element came from (for the
+ * details panel; findings get theirs from urdf-inspector).
  * @param {XmlElement} root
- * @param {Map<XmlElement, string>} files
  * @param {string} fallback
  * @returns {(path: string) => string}
  */
-function elementFiles(root, files, fallback) {
+function elementFiles(root, fallback) {
   /** @type {Map<string, string>} */
   const byKey = new Map();
   for (const c of root.children)
     if (c.attrs.name !== undefined) {
       const key = `${c.name}|${c.attrs.name}`;
-      if (!byKey.has(key)) byKey.set(key, files.get(c) ?? fallback);
+      if (!byKey.has(key)) byKey.set(key, c.source ?? fallback);
     }
   return (path) => {
     const m = /^\/robot\/([^[/]+)\[@(?:name|reference)='((?:[^']|&apos;)*)'\]/.exec(path);
-    if (!m) return files.get(root) ?? fallback;
-    return byKey.get(`${m[1]}|${m[2].replace(/&apos;/g, "'")}`) ?? files.get(root) ?? fallback;
+    if (!m) return root.source ?? fallback;
+    return byKey.get(`${m[1]}|${m[2].replace(/&apos;/g, "'")}`) ?? root.source ?? fallback;
   };
 }

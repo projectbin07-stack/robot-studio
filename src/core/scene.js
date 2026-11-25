@@ -6,10 +6,11 @@
 import {
   forwardKinematics,
   isMovable,
+  jointFrames,
   massProperties,
   sliderRange,
 } from "../../vendor/urdf-inspector/src/core/fk.js";
-import { compose, fromXyzRpy, normalize, norm } from "../../vendor/urdf-inspector/src/core/math.js";
+import { fromXyzRpy, normalize, norm } from "../../vendor/urdf-inspector/src/core/math.js";
 
 /** @typedef {import("../../vendor/urdf-inspector/src/core/math.js").Transform} Transform */
 /** @typedef {import("../../vendor/urdf-inspector/src/core/urdf.js").Robot} Robot */
@@ -93,15 +94,15 @@ export function shapeColor(s, robot) {
  */
 export function posesFor(tree, q) {
   const poses = forwardKinematics(tree, q);
+  const frames = jointFrames(tree, q, poses);
   /** @type {Map<string, number[]>} */
   const links = new Map();
   for (const [name, t] of poses) links.set(name, matrix4(t));
   /** @type {JointMarker[]} */
   const joints = [];
   for (const j of tree.joints.values()) {
-    const parent = poses.get(j.parent);
-    if (!parent || !isMovable(j) || norm(j.axis) === 0) continue;
-    const frame = compose(parent, fromXyzRpy(j.origin.xyz, j.origin.rpy));
+    const frame = frames.get(j.name);
+    if (!frame || !isMovable(j) || norm(j.axis) === 0) continue;
     joints.push({
       name: j.name,
       type: String(j.type),

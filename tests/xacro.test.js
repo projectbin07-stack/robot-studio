@@ -348,10 +348,10 @@ test("serialisation follows xacro's pretty printer, conversion keeps lines and f
     serializeXml(r.root),
     `<?xml version="1.0" ?>\n<!-- head -->\n<robot a="&quot;1&quot;" b="2" name="r">\n  <link name="l">text &amp; &lt;</link>\n  <x>  </x>\n  <y>\n    a\n    <z/>\n    b\n  </y>\n</robot>\n`,
   );
-  const { root, files } = toXmlElement(r.root);
+  const root = toXmlElement(r.root);
   assert.equal(root.children[0].line, 4);
   assert.equal(root.children[0].text, "text & <");
-  assert.equal(files.get(root.children[0]), "/a.xacro");
+  assert.equal(root.children[0].source, "/a.xacro");
 });
 
 test("the document reader: syntax errors with positions, normalisation, entities", () => {

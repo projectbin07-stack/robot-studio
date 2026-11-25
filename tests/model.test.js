@@ -106,7 +106,7 @@ test("findings name the file their element came from; xacro problems become find
   const warn = m.findings.find((f) => f.id === "xacro-warning");
   assert.match(warn?.message ?? "", /unknown attribute\(s\): odd/);
   assert.equal(warn?.file, "/r/main.xacro");
-  assert.ok(Object.keys(STUDIO_CHECKS).includes("mesh-missing"));
+  assert.ok(!Object.keys(STUDIO_CHECKS).includes("mesh-missing"), "urdf-inspector 0.2.0 has it");
   assert.match(m.urdf, /^<\?xml version="1.0" \?>\n<robot name="t">/);
   assert.equal(m.xacro, true);
 });

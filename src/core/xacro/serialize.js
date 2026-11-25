@@ -70,13 +70,11 @@ export function serializeXml(root) {
 
 /**
  * Convert to urdf-inspector's XmlElement tree (text concatenated, comments
- * dropped). Returns the tree and the source file of every element.
+ * dropped). Every element's `source` is the file it came from.
  * @param {XElement} root
- * @returns {{ root: XmlElement, files: Map<XmlElement, string> }}
+ * @returns {XmlElement}
  */
 export function toXmlElement(root) {
-  /** @type {Map<XmlElement, string>} */
-  const files = new Map();
   /** @param {XElement} el @returns {XmlElement} */
   const conv = (el) => {
     /** @type {XmlElement[]} */
@@ -86,9 +84,14 @@ export function toXmlElement(root) {
       if (c.type === "element") children.push(conv(c));
       else if (c.type === "text" || c.type === "cdata") text += c.value;
     }
-    const x = { name: el.name, attrs: { ...el.attrs }, children, text, line: el.line };
-    files.set(x, el.file);
-    return x;
+    return {
+      name: el.name,
+      attrs: { ...el.attrs },
+      children,
+      text,
+      line: el.line,
+      source: el.file,
+    };
   };
-  return { root: conv(root), files };
+  return conv(root);
 }
