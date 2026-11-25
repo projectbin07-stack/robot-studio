@@ -35,7 +35,11 @@
         </p>
       </div>
       <nav>
-        <a href="https://github.com/projectbin07-stack/robot-studio">Source and docs</a>
+        <button type="button" id="btn-welcome" title="What the studio does, and a guided example">
+          Start here
+        </button>
+        <a href="https://github.com/projectbin07-stack/robot-studio/tree/main/docs#readme">Docs</a>
+        <a href="https://github.com/projectbin07-stack/robot-studio">Source</a>
         <button type="button" id="btn-link" title="Copy a link to this view">Copy link</button>
         <button type="button" id="btn-theme" title="Switch between automatic, light and dark">
           Theme: auto
@@ -357,6 +361,63 @@
           103).
         </p>
         <div class="dropping" id="dropping">Drop to open</div>
+        <section class="welcome" id="welcome" aria-labelledby="welcome-title" hidden>
+          <div id="welcome-cards">
+            <h2 id="welcome-title">Robot Studio does three things</h2>
+            <div class="welcome-grid">
+              <div class="wcard">
+                <h3>1. Open or build a robot</h3>
+                <p>
+                  A URDF or xacro file, a package folder or a .zip, or a mecanum, differential or
+                  arm template. Checked by urdf-inspector, shown in 3D, exported as URDF, xacro or a
+                  ROS 2 package.
+                </p>
+                <div class="row">
+                  <button type="button" id="welcome-open">Open files…</button>
+                  <button type="button" id="welcome-build">Build from a template</button>
+                </div>
+              </div>
+              <div class="wcard">
+                <h3>2. Simulate it</h3>
+                <p>
+                  Drive it in a 2D world with simulated wheels, encoders, IMU and LiDAR at its URDF
+                  frames, and compare wheel odometry, scan matching and MCL with the simulated
+                  truth.
+                </p>
+                <div class="row">
+                  <button type="button" id="welcome-sim">Simulate the example</button>
+                </div>
+              </div>
+              <div class="wcard">
+                <h3>3. Connect to ROS 2</h3>
+                <p>
+                  Show a robot running rosbridge_server live, drive it behind an explicit opt-in, or
+                  replay a recording. Tested against a simulated rosbridge server; no real robot has
+                  been connected yet.
+                </p>
+                <div class="row">
+                  <button type="button" id="welcome-ros">Connect or replay</button>
+                </div>
+              </div>
+            </div>
+            <div class="row">
+              <button type="button" id="welcome-start" class="primary">
+                Guided example (4 steps)
+              </button>
+              <button type="button" id="welcome-close">Close</button>
+            </div>
+          </div>
+          <div id="welcome-tour" hidden>
+            <h2 id="tour-title"></h2>
+            <p id="tour-text"></p>
+            <p class="note" id="tour-status" role="status"></p>
+            <div class="row">
+              <button type="button" id="tour-back">Back</button>
+              <button type="button" id="tour-next" class="primary">Next</button>
+              <button type="button" id="tour-end">Close</button>
+            </div>
+          </div>
+        </section>
       </section>
 
       <aside class="side right">

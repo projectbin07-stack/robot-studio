@@ -6,6 +6,7 @@ import { EXAMPLES, exampleFs, findExample } from "../core/examples.js";
 import { loadModel } from "../core/model.js";
 import { sliders } from "../core/scene.js";
 import { treeKeyTarget } from "../core/treenav.js";
+import { initWelcome } from "./welcome.js";
 import { CHECKS } from "../../vendor/urdf-inspector/src/core/findings.js";
 import { STUDIO_CHECKS } from "../core/model.js";
 import { decodeState, encodeState } from "./state.js";
@@ -1169,6 +1170,8 @@ rosUi = initRos({
 
 // ---------------------------------------------------------------- start
 document.title = `Robot Studio ${VERSION}`;
+// The first-run panel: on a plain visit (no state in the link).
+initWelcome({ firstVisit: location.search === "" && location.hash === "" });
 applyTheme();
 syncOptions();
 if (state.source === "files") {

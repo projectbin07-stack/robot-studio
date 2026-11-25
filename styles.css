@@ -1120,3 +1120,60 @@ fieldset.layers legend {
   overflow-x: auto;
   max-width: 100%;
 }
+
+/* ------------------------------------------------------------ first run: start here, guided example */
+.welcome {
+  position: absolute;
+  inset: 52px 12px 12px;
+  z-index: 5;
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px rgb(0 0 0 / 18%);
+  padding: 16px 18px;
+}
+
+.welcome.touring {
+  inset: auto 12px 12px;
+  max-height: 45%;
+}
+
+.welcome h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.welcome-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.wcard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+}
+
+.wcard h3 {
+  margin: 0 0 6px;
+  font-size: 15px;
+}
+
+.wcard p {
+  margin: 0;
+  color: var(--text);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+#tour-text {
+  max-width: 70ch;
+}
