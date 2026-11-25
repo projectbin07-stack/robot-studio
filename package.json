@@ -1,6 +1,6 @@
 {
   "name": "robot-studio",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Open, build and simulate robot models in the browser: xacro, URDF checks, 3D view, builder, simulated sensors and SLAM.",
   "license": "MIT",
