@@ -290,7 +290,7 @@ jobs:
           $S --url "http://127.0.0.1:8000/?s=r2d2" --expect-links 16 --expect-summary "meshes 8/8 shown"
           $S --url "http://127.0.0.1:8000/?s=rrbot" --expect-links 5
           $S --url "http://127.0.0.1:8000/?a=use_lidar:false,use_camera:false" --expect-links 7
-          $S --url "http://127.0.0.1:8000/" --upload tests/fixtures/description.zip --expect-links 1 --expect-summary "meshes 1/1 shown"
+          $S --url "http://127.0.0.1:8000/" --close-welcome --upload tests/fixtures/description.zip --expect-links 1 --expect-summary "meshes 1/1 shown"
           $S --url "http://127.0.0.1:8000/?theme=dark" --width 390 --height 844 --mobile --expect-links 11 --screenshot phone.png --axe --axe-report axe-phone.json
       - name: "Accessibility: keyboard only (tree, a joint slider, the view toolbar, the Simulate and ROS 2 panels; focus outlines), in both themes; axe-core WCAG 2.1 A/AA after each"
         run: |
@@ -298,24 +298,28 @@ jobs:
           $S --url "http://127.0.0.1:8000/?theme=light" --keyboard --axe --expect-links 11 --timeout 120000
           $S --url "http://127.0.0.1:8000/?theme=dark" --keyboard --axe --expect-links 11 --timeout 120000
           $S --url "http://127.0.0.1:8000/?s=r2d2&theme=dark" --keyboard --axe --expect-links 16 --timeout 120000
+      - name: "First run: the Start here panel on a plain visit and the four-step guided example, with the keyboard (screenshots of each step)"
+        run: |
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
+          $S --url "http://127.0.0.1:8000/" --theme light --tour --shots first-run --axe --timeout 180000
       - name: "Performance budget: a generated 200-link model with about 50 MB of STL meshes opens in under 10 s (open time in the output)"
         run: |
           node scripts/large-model.mjs -o large_robot.zip
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
-          $S --url "http://127.0.0.1:8000/" --upload large_robot.zip --expect-links 200 --expect-summary "meshes 200/200 shown" --max-open-ms 10000 --timeout 180000 --screenshot large-model.png
+          $S --url "http://127.0.0.1:8000/" --upload large_robot.zip --expect-links 200 --expect-summary "meshes 200/200 shown" --max-open-ms 10000 --timeout 180000 --close-welcome --screenshot large-model.png
           rm large_robot.zip
       - name: "Builder: mecanum template through the UI, edit a parameter, undo with Ctrl+Z, export, reload (edit timing in the output)"
         # The server started in the previous step is still running.
         run: |
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
-          $S --url "http://127.0.0.1:8000/" --builder --select-link front_left_wheel --expect-links 10 --expect-summary "0 error(s), 0 warning(s)" --screenshot builder.png --axe --axe-report axe-builder.json
+          $S --url "http://127.0.0.1:8000/" --close-welcome --builder --select-link front_left_wheel --expect-links 10 --expect-summary "0 error(s), 0 warning(s)" --screenshot builder.png --axe --axe-report axe-builder.json
           $S --url "http://127.0.0.1:8000/?s=r2d2" --edit-model --expect-links 16 --expect-summary "meshes 8/8 shown"
-          $S --url "http://127.0.0.1:8000/" --template arm --expect-links 9 --expect-summary "0 error(s), 0 warning(s), 0 note(s)"
+          $S --url "http://127.0.0.1:8000/" --close-welcome --template arm --expect-links 9 --expect-summary "0 error(s), 0 warning(s), 0 note(s)"
       - name: "Simulation: mecanum template on a scripted route, the robot moves, error measures and plots fill in; teleop, world edit, a setting, recording download; no console errors (frame rate and step time in the output)"
         run: |
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
           $S --url "http://127.0.0.1:8000/?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 15 --sim-interact --expect-links 10 --screenshot sim-mecanum.png --timeout 180000 --axe --axe-report axe-sim.json
-          $S --url "http://127.0.0.1:8000/" --template diff --sim --sim-world lab --sim-route square --sim-seconds 8 --expect-links 9 --screenshot sim-diff.png --timeout 180000
+          $S --url "http://127.0.0.1:8000/" --close-welcome --template diff --sim --sim-world lab --sim-route square --sim-seconds 8 --expect-links 9 --screenshot sim-diff.png --timeout 180000
       - name: "ROS 2 live view against the fake rosbridge server (simulated fixtures): connect by click, LIVE labels, opt-in, drive with W, release and blur stop it (the server's log is checked)"
         run: |
           node scripts/fake-rosbridge.mjs --port 9090 --fixture tests/fixtures/rosbridge/sim_mecanum.jsonl --description tests/fixtures/rosbridge/robot_description.urdf --log rosbridge-log.jsonl &
@@ -327,7 +331,7 @@ jobs:
           node bin/robot-studio.js sim mecanum --world office --route demo --seconds 20 --seed 1 --out rec
           (cd rec && python3 -m zipfile -c ../rec.zip .)
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome"
-          $S --url "http://127.0.0.1:8000/" --template mecanum --replay rec.zip --expect-links 10 --screenshot ros-replay.png --timeout 180000 --axe --axe-report axe-replay.json
+          $S --url "http://127.0.0.1:8000/" --close-welcome --template mecanum --replay rec.zip --expect-links 10 --screenshot ros-replay.png --timeout 180000 --axe --axe-report axe-replay.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
