@@ -194,6 +194,10 @@ against lidar-slam-lab's own loop number for number, and CI against its CLI
 benchmark. The proper fix, a sensor pose in lidar-slam-lab, is upstream
 request 1.
 
+Since 1.0 the scans carry their sensor pose (`scan.origin`, lidar-slam-lab
+0.2.0) and are no longer re-expressed; the estimators still track the drive
+frame ([23](#23-upstream-fixes-are-made-upstream-released-then-vendored)).
+
 ## 16. Worlds are lidar-slam-lab maps plus heights
 
 The world format extends lidar-slam-lab's map JSON with a wall height,
@@ -275,3 +279,64 @@ robots share (estimators on incoming odometry and scans, plot histories);
 `SimSession.frame()` gives the same shape for the simulation. The bag clock
 starts at 1 s (a stamp of 0 means "not set" to ROS tools) and the importer
 subtracts the bag's start, so recordings keep starting at 0.
+
+## 23. Upstream fixes are made upstream, released, then vendored
+
+Milestone 5 moved every workaround it could into the project that owns the
+code: urdf-inspector 0.2.0 (mesh lookup callback, finding sources, joint
+frames, location formatter, `exports`), lidar-slam-lab 0.2.0 and 0.2.1
+(scan origin, minimum range, asymmetric fans, the omnidirectional MCL
+model, scan-log input, the estimate before resampling, `exports`),
+rosbag-inspect 0.3.0, odobridge 0.2.0 and imu-calibration-lab 0.2.0. Each
+has its own tests, changelog, green CI and a release tag; Robot Studio then
+moves its pin (`scripts/vendor.mjs`, `python/pyproject.toml`, the CI
+install lines) and its own code shrinks. Changes that only Robot Studio
+needs stay here (the studio decides which MCL
+options to use, lidar-slam-lab keeps its own defaults so its benchmark is
+unchanged). The status of every request is in
+[upstream-requests.md](upstream-requests.md).
+
+## 24. MCL tracks without random-particle recovery by default
+
+Augmented MCL's recovery replaces particles with random ones when the
+recent fit drops. In the studio's simulations it did more harm than good
+while tracking from a known start: in the corridor loop TurtleBot3's short
+LiDAR and heading drift lowered the fit and injected particles took over a
+similar-looking place (5.5 m RMS). Recovery is therefore off by default
+(`estimators.mclRecovery`), as ROS AMCL's `recovery_alpha_*` defaults of 0
+also have it; it stays available for kidnapping experiments. A per-particle
+heading-drift state was tried upstream first and dropped: it did not fix
+the corridor runs. Numbers before and after are in
+[simulation.md](simulation.md#estimators).
+
+## 25. Accessibility is tested in the browser job, with a vendored axe-core
+
+axe-core 4.14.0 (MPL-2.0) is vendored like three.js (pinned, hashed in the
+manifest, verified against npm in CI) but only used by
+`scripts/browser-smoke.mjs` and not published to Pages. It runs after every
+browser scenario and any WCAG 2.1 A/AA violation fails the job. Automated
+rules cannot judge keyboard use, so a separate scenario drives the page
+with real key events and checks that focus is visible after each step.
+Nothing was tested with a screen reader ([accessibility.md](accessibility.md)).
+
+## 26. Reaching a robot: a local launch first, the live site with permission second
+
+A public https page opening `ws://` on the local network is governed by
+each browser's mixed-content and Local Network Access rules, which changed
+during 2025-2026 and differ between browsers. Rather than depend on them,
+`robot-studio studio` serves the same static page from 127.0.0.1 (where
+neither rule applies) and opens it with the address filled in; through
+`npx github:...` it needs no clone. The live site still works in Chrome and
+Edge once the user allows local network access, and the ROS 2 panel says
+which route to take. What was tested and what was not is in
+[ros2.md](ros2.md#reaching-a-robot-from-the-live-site).
+
+## 27. A first-run panel instead of a landing page
+
+The page opens straight into the studio with an example loaded, which
+showed everything at once. Milestone 5 adds a panel over the 3D view on a
+plain first visit (no state in the link): the three jobs with one button
+each and a guided example that performs each step in the page itself.
+It is dismissed for good with Close (local storage) and comes back from
+**Start here**. Links with state skip it, so shared links and the tests
+open the studio directly.
