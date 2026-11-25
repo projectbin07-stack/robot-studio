@@ -193,15 +193,52 @@ Acceptance criteria and where they stand:
    [ros2.md](ros2.md#for-the-robots-owner-mentorpi); the README's hardware
    row stays empty until they are done.
 
-## Milestone 5: Release polish
+## Milestone 5: Release polish (v1.0.0, done)
 
-1. Documentation site pages for each feature with screenshots taken from
-   the live site in CI.
-2. Accessibility pass (keyboard operation of the tree, sliders and view
-   toolbar; contrast in both themes) with an automated check in CI.
-3. Performance budget: a 200-link, 50 MB-mesh model opens in under 10 s in
-   the CI browser job (measured, reported).
-4. Fixes found on the way pushed upstream to urdf-inspector, lidar-slam-lab
-   and the other reused repositories (see
-   [upstream-requests.md](upstream-requests.md)), and the vendored pins
-   moved to those releases.
+Documentation, accessibility, a performance budget and the upstream fixes.
+Validation: software tests and simulation; hardware none (milestone 4's
+criterion 7 is still open and needs the robot's owner).
+
+Acceptance criteria and where they stand:
+
+1. **Met.** Documentation pages for each feature
+   ([docs/README.md](README.md): getting started, model, builder,
+   simulation, ROS 2, command line, keyboard and accessibility, xacro) with
+   screenshots taken from the live site by the Pages workflow's
+   `screenshots` job after a deploy (artifact `docs-screenshots`); the
+   committed ones (`docs/img/live/`) were checked by eye. The CLI page's
+   outputs are real runs.
+2. **Met.** Keyboard operation of the tree (WAI-ARIA tree, arrow keys),
+   sliders, the view toolbar and the Simulate and ROS 2 panels, with
+   visible focus, is driven with real key events in the CI browser job in
+   both themes; axe-core 4.14.0 (WCAG 2.1 A/AA) runs after every browser
+   scenario and fails the job on any violation. Before: 2 to 3 rules
+   violated on 3 to 16 elements per page state (v0.4.0, development
+   machine); after: none ([accessibility.md](accessibility.md)). Not done:
+   a screen reader test.
+3. **Met.** A generated 200-link model with 51.0 MB of STL meshes
+   (`scripts/large-model.mjs`) opens in 2.8 s in the CI browser job
+   (headless Chrome 157, SwiftShader; budget 10 s, enforced) and 2.4 s on
+   the development machine (headless Edge 158). No optimisation was needed.
+4. **Met.** urdf-inspector v0.2.0, lidar-slam-lab v0.2.0 and v0.2.1,
+   rosbag-inspect v0.3.0, encoder-odometry-firmware v0.2.0 and
+   imu-calibration-lab v0.2.0 released with the fixes; the vendored pins,
+   the Python pin and the CI pins moved to them. Requests not done, with
+   the reasons, are in [upstream-requests.md](upstream-requests.md)
+   (urdf-inspector 1, lidar-slam-lab 3, and lidar-slam-lab 5's heading-bias
+   term). MCL numbers before and after are in
+   [simulation.md](simulation.md#estimators).
+
+Also delivered: `robot-studio studio` (the one-command local launch for
+reaching a robot) and the research on reaching a robot from the live site
+([ros2.md](ros2.md#reaching-a-robot-from-the-live-site)); the first-run
+panel and guided example; fixes for an empty view after closing the
+simulation and for the template form losing focus.
+
+## After 1.0
+
+- Hardware: the steps for the MentorPi in
+  [ros2.md](ros2.md#for-the-robots-owner-mentorpi); the README's hardware
+  row stays empty until they are done.
+- A screen reader pass (NVDA and VoiceOver).
+- Level of detail for very large meshes; a transform gizmo in the builder.

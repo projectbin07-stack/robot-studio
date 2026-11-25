@@ -10,7 +10,7 @@ the bag or rosbag-inspect's built-in table. This package only maps decoded messa
 recording's files.
 
 ```bash
-pip install "robot-studio-bag @ git+https://github.com/projectbin07-stack/robot-studio@v0.4.0#subdirectory=python"
+pip install "robot-studio-bag @ git+https://github.com/projectbin07-stack/robot-studio@v1.0.0#subdirectory=python"
 robot-studio-bag my_bag/ my_recording/
 robot-studio replay my_recording/          # from the robot-studio repository (Node 22+)
 ```

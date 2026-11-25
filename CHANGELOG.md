@@ -4,6 +4,84 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-11-25
+
+Milestone 5, "Release polish": documentation, accessibility, a
+performance budget and the upstream fixes. Validation: software tests;
+simulation (labelled simulated); hardware none: no robot has been connected
+and no robot bag has been read (milestone 4's criterion 7 is still open).
+
+### Added
+
+- Documentation pages for every feature (`docs/README.md`: getting
+  started, model, builder, simulation, ROS 2, command line, keyboard and
+  accessibility, xacro), with screenshots taken from the live site by a new
+  `screenshots` job in the Pages workflow after each deploy.
+- First run: a **Start here** panel over the 3D view on a plain visit
+  (open or build a robot, simulate it, connect to ROS 2, one button each)
+  and a four-step guided example that does each step in the page; **Start
+  here**, **Docs** and **Source** in the header.
+- `robot-studio studio [--ros URL] [--port N] [--no-open]`: serves the page
+  on 127.0.0.1 only and opens it with the rosbridge address filled in; with
+  `npx github:projectbin07-stack/robot-studio studio` no clone is needed. A
+  page served from the computer reaches `ws://` on the local network without
+  mixed-content blocking or a permission prompt (tested with Chrome 157 and
+  Edge 158).
+- The ROS 2 panel says what the browser will do with `ws://` from the https
+  site (local network permission for IP addresses and `.local`, mixed
+  content for other names) and when local network access was denied.
+- Accessibility: the kinematic tree is a WAI-ARIA tree (one Tab stop, arrow
+  keys, Home/End, Enter); visible focus on every control; the folder and
+  world-file inputs are reachable with the keyboard; the template form keeps
+  the focus after it re-renders. axe-core 4.14.0 (vendored, MPL-2.0, CI only)
+  runs after every browser scenario, and keyboard-only scenarios run in both
+  themes. On the development machine axe-core found 2 to 3 rules violated on
+  3 to 16 elements per page state in 0.4.0 and none now
+  ([docs/accessibility.md](docs/accessibility.md)).
+- Performance budget: `scripts/large-model.mjs` generates a 200-link
+  package with 51.0 MB of STL meshes; the CI browser job opens it and fails
+  above 10 s. Measured: 2.8 s in CI (headless Chrome 157, SwiftShader),
+  2.4 s on the development machine (headless Edge 158).
+- Settings `estimators.mclOmni` (lidar-slam-lab's omnidirectional MCL motion
+  model, on mecanum bases, default on) and `estimators.mclRecovery`
+  (random-particle recovery, default off).
+- Browser smoke test options `--axe`, `--keyboard`, `--tour`, `--shots`,
+  `--max-open-ms`, `--grant-local-network`, `--theme`, `--close-welcome`;
+  the fake rosbridge server's `--host`; `scripts/loopback-buffer.mjs`.
+
+### Changed
+
+- Vendored urdf-inspector v0.2.0 (was v0.1.1): its `meshExists` option
+  reports `mesh-missing`, findings get their file from `XmlElement.source`,
+  and the joint axes use `jointFrames`; the studio's own versions are gone.
+- Vendored lidar-slam-lab v0.2.1 (was v0.1.0): scans carry the LiDAR mount
+  as their origin (the studio's re-expressed scans are gone), the minimum
+  range is lidar-slam-lab's, and the MCL estimate is taken before
+  resampling.
+- MCL tracks without random-particle recovery by default. MCL RMS over
+  seeds 1 to 8 (development machine): TurtleBot3 in the corridor loop
+  0.129 to 7.438 m before, 0.063 to 0.168 m now (seed 1 over 20 s: 5.455 m
+  before, 0.120 m now); the mecanum template's square in the lab 0.231 to
+  0.237 m before, 0.017 to 0.030 m now; the differential template's square
+  0.131 to 0.155 m before, 0.027 to 0.075 m now; a replay of a differential
+  run 0.200 m before, 0.021 m now. Simulation output, not measurements.
+- rosbag-inspect v0.3.0 (was v0.2.0; per-topic Hz for MCAP, ROS 1 bags
+  named, schema-v4 definitions); CI checks the rates on the exported bags.
+- odobridge v0.2.0 (was v0.1.0) in the firmware cross-check: the same model
+  with a declared, documented API.
+- The golden digest and the bag and rosbridge fixtures were regenerated
+  (estimates changed; the drive, sensors and telemetry did not).
+- Contrast in both themes: the light theme's accent, warning and
+  "simulated" badge colours are darker; text on the accent is dark in the
+  dark theme.
+
+### Fixed
+
+- Closing the simulation or a replay left the 3D view empty: the camera
+  stayed where the robot had driven. The view is framed on the model again.
+- The template form moved the keyboard focus out of it after a parameter
+  edit.
+
 ## [0.4.0] - 2026-11-25
 
 Milestone 4, "ROS 2". Validation: software tests; simulation (bags,

@@ -16,13 +16,17 @@ robot's own data in the same views and drive it behind a dead-man switch;
 write a simulated run as a ROS 2 bag, and replay bags through the same
 estimators. No ROS install needed in the browser, no upload.
 
-**Live:** <https://projectbin07-stack.github.io/robot-studio/>
+**Live:** <https://projectbin07-stack.github.io/robot-studio/> (a first
+visit shows what it does and offers a four-step guided example) ·
+**Docs:** [docs/README.md](docs/README.md) · **Run it locally, for a robot
+on your network:** `npx github:projectbin07-stack/robot-studio studio`
 
-> **Validation status (v0.4.0):** software tests: yes (Node tests on
+> **Validation status (v1.0.0):** software tests: yes (Node tests on
 > Ubuntu and Windows, xacro compared with the official `xacro`, builder
 > exports checked with the official xacro, mecanum-kinematics and colcon;
 > the rosbridge client against a fake rosbridge server; exported bags read
-> by rosbag-inspect and by ROS 2 Humble's own `rosbag2_py` and `rclpy`).
+> by rosbag-inspect and by ROS 2 Humble's own `rosbag2_py` and `rclpy`;
+> axe-core and keyboard-only runs in the browser job).
 > Simulation: yes, labelled as model output everywhere, including bags,
 > replays and comparisons made from simulated runs. Hardware: **none**; no
 > robot has been connected and no bag from a robot has been read. See
@@ -48,13 +52,17 @@ them. It is built in five milestones ([ROADMAP](docs/ROADMAP.md)):
    [lidar-slam-lab](https://github.com/projectbin07-stack/lidar-slam-lab), an
    IMU with [imu-calibration-lab](https://github.com/projectbin07-stack/imu-calibration-lab)'s
    calibration as its error model, TF and plots, always labelled simulated.
-4. **ROS 2 (0.4, this release):** a rosbridge client for a live robot
+4. **ROS 2 (0.4):** a rosbridge client for a live robot
    view and `cmd_vel` behind a dead-man switch, ROS 2 bag (MCAP) export of
    simulated runs, and bag import through
    [rosbag-inspect](https://github.com/projectbin07-stack/rosbag-inspect) for
    replays and simulation-vs-robot comparisons.
-5. **Release polish:** docs, performance budget, accessibility, upstream
-   fixes.
+5. **Release polish (1.0, this release):** documentation pages with
+   screenshots from the live site, keyboard operation and axe-core in CI,
+   a 200-link / 51 MB performance budget (2.8 s in CI), upstream fixes
+   released in the reused projects and the pins moved, a first-run panel
+   with a guided example, and `robot-studio studio` for reaching a robot.
+   What changed: [CHANGELOG](CHANGELOG.md).
 
 ## ROS 2 (new in 0.4)
 
@@ -127,10 +135,11 @@ both), and identical estimator results when both are replayed.
 MentorPi (ROS 2 Humble): on the robot, `sudo apt install
 ros-humble-rosbridge-suite`, start the robot as usual and run `ros2 launch
 rosbridge_server rosbridge_websocket_launch.xml`. On a laptop on the same
-network, run the studio locally (`git clone --branch v0.4.0 ...`, `node
-scripts/serve.js`; the https live site cannot open `ws://` to another
-machine) and open `http://127.0.0.1:8000/?ros=ws://<robot-ip>:9090`, then
-Connect. Lift the wheels off the ground and check the robot stops by itself
+network, run `npx github:projectbin07-stack/robot-studio studio --ros
+<robot-ip>` (it serves the page from the laptop and opens it with the
+address filled in), then Connect. From the https live site, Chrome and Edge
+can connect too once you allow local network access when asked
+([what was tested](docs/ros2.md#reaching-a-robot-from-the-live-site)). Lift the wheels off the ground and check the robot stops by itself
 before enabling driving at 10 %. Record a bag with `ros2 bag record -o
 mentorpi_run /scan /odom /imu /tf /tf_static /joint_states /cmd_vel
 /robot_description`, import it with `robot-studio-bag mentorpi_run
@@ -255,9 +264,9 @@ Details, formats and how each export is verified: [docs/builder.md](docs/builder
   frames, joint axes, centre of mass, click to select, Z up (REP 103).
 - **Joint sliders** that respect limits (continuous joints ±π, mimic joints
   follow) and drive urdf-inspector's forward kinematics live.
-- **Live checks:** urdf-inspector's 72 checks run on the expanded model;
+- **Live checks:** urdf-inspector's 73 checks run on the expanded model;
   each finding names the file and line it came from and selects its link or
-  joint. Robot Studio adds `mesh-missing` and xacro warnings.
+  joint (`mesh-missing` through the page's file lookup). Robot Studio adds xacro errors and warnings.
 - Kinematic tree, details panel (pose, inertia, geometry, mesh status),
   xacro argument form, download of the expanded URDF, shareable links,
   light and dark themes, phone layout.
@@ -265,7 +274,11 @@ Details, formats and how each export is verified: [docs/builder.md](docs/builder
   TurtleBot3 Burger (ROBOTIS, Apache-2.0), the ROS URDF tutorial robot
   (BSD-3-Clause) and ros2_control_demos RRBot (Apache-2.0), unmodified and
   attributed ([sources](tests/corpus/SOURCES.md)).
-- **CLI:** `robot-studio xacro` and `robot-studio check`.
+- **CLI:** `robot-studio xacro` and `robot-studio check` (every command:
+  [docs/cli.md](docs/cli.md)).
+- **Keyboard:** the tree, sliders, toolbar and panels work without a mouse,
+  with visible focus; checked by axe-core and keyboard-only runs in CI
+  ([docs/accessibility.md](docs/accessibility.md)).
 
 | Dark theme, R2D2 tutorial robot with COLLADA gripper meshes                           | Phone width                                               |
 | ------------------------------------------------------------------------------------- | --------------------------------------------------------- |
@@ -287,6 +300,7 @@ git clone https://github.com/projectbin07-stack/robot-studio.git
 cd robot-studio
 npm ci                 # dev tools only
 npm run serve          # http://127.0.0.1:8000/
+node bin/robot-studio.js studio   # the same, and opens the browser (--ros URL fills in a robot)
 ```
 
 CLI (Node 22 or newer; `sim` is shown [above](#simulation-new-in-03)), viewer:
@@ -368,8 +382,8 @@ flowchart LR
     ROS[ros/<br/>rosbridge client, live session,<br/>dead-man gate, CDR + MCAP writer,<br/>replay, compare]
   end
   subgraph vendor["vendor/ (pinned, hash-checked)"]
-    UI[urdf-inspector v0.1.1<br/>URDF reader, 72 checks,<br/>FK, inertia, wheels]
-    LS[lidar-slam-lab v0.1.0<br/>ray casting, grid, scan matching,<br/>MCL, maps, autopilot]
+    UI[urdf-inspector v0.2.0<br/>URDF reader, 73 checks,<br/>FK, inertia, wheels]
+    LS[lidar-slam-lab v0.2.1<br/>ray casting, grid, scan matching,<br/>MCL, maps, autopilot]
     T[three.js 0.187.0<br/>+ STL/OBJ/Collada loaders]
   end
   subgraph ui["src/ui (browser)"]
@@ -405,7 +419,7 @@ flowchart LR
   RU --> SU
   CLI --> ROS
   RBG[rosbridge_server<br/>on the robot] <-.-> ROS
-  PY[python/ robot-studio-bag] --> RB[rosbag-inspect v0.2.0<br/>bag reading, CDR]
+  PY[python/ robot-studio-bag] --> RB[rosbag-inspect v0.3.0<br/>bag reading, CDR]
   PY -.-> ROS
 ```
 
@@ -427,11 +441,11 @@ everything, see [docs/HANDOFF.md](docs/HANDOFF.md).
 
 Kept as three separate tiers in every release:
 
-| Tier               | Status in 0.4.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Software tests** | Yes. 181 Node tests and 10 Python tests. Viewer, xacro, builder and simulation as in 0.3 (xacro goldens from the official `xacro` 2.1.1, builder exports checked with the official xacro, mecanum-kinematics v0.1.0 and colcon in `ros:humble-ros-base`; the simulator cross-checked with mecanum-kinematics, encoder-odometry-firmware's firmware model and lidar-slam-lab's benchmark). New in 0.4: the rosbridge client, live session and dead-man switch against an in-repo fake rosbridge server (subscriptions, reconnects, malformed, oversized, binary and unknown messages, fragments, dead-man timing on a fake clock and over a real connection); CDR bytes, the MCAP writer and the bag topic mapping; replay and comparison; the Python companion (ruff, mypy strict, pytest, Ubuntu and Windows, Python 3.10 and 3.13). Exported bags are read back in CI by rosbag-inspect v0.2.0 and by ROS 2 Humble (`ros2 bag info`, every message deserialized by `rosbag2_py` + `rclpy` and compared). Coverage of `src/core` 99.5 % lines / 94.6 % branches with thresholds enforced. Headless Chrome job: every example, builder, simulation, and the live view against the fake server (connect by click, opt-in, drive, release, blur; the server's log is checked) and a replay with the comparison, with no console errors. |
-| **Simulation**     | Yes, labelled as model output in every panel, plot, export and CLI report, and now in bags (`/robot_studio/source`, MCAP metadata), imported recordings and replays ("Replay: SIMULATED data") and the comparison ("vs a SIMULATED recording (not a robot)"). The round trip simulation → bag → import → replay keeps every value (details in [docs/ros2.md](docs/ros2.md#how-it-is-checked)). Simulation results and cross-checks as in [docs/simulation.md](docs/simulation.md); comparisons between models, not validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **Hardware**       | None. No robot has been connected over rosbridge, nothing has been driven, no bag recorded from a robot has been read, and no exported package or simulated parameter has been checked on a robot. The steps for the owner's MentorPi are in [docs/ros2.md](docs/ros2.md#for-the-robots-owner-mentorpi); this row stays empty until they are done and recorded here with the date, commit and what was observed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Tier               | Status in 1.0.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Software tests** | Yes. 189 Node tests and 10 Python tests. New in 1.0: axe-core (WCAG 2.1 A/AA) after every browser scenario with zero violations allowed, keyboard-only runs in both themes, the guided example, the 200-link performance budget (opens in 2.8 s, budget 10 s), the `studio` server, and imu-calibration-lab 0.2.0's combined file; the cross-checks moved to lidar-slam-lab v0.2.1, odobridge v0.2.0 and rosbag-inspect v0.3.0. Viewer, xacro, builder and simulation as in 0.3 (xacro goldens from the official `xacro` 2.1.1, builder exports checked with the official xacro, mecanum-kinematics v0.1.0 and colcon in `ros:humble-ros-base`; the simulator cross-checked with mecanum-kinematics, encoder-odometry-firmware's firmware model and lidar-slam-lab's benchmark). New in 0.4: the rosbridge client, live session and dead-man switch against an in-repo fake rosbridge server (subscriptions, reconnects, malformed, oversized, binary and unknown messages, fragments, dead-man timing on a fake clock and over a real connection); CDR bytes, the MCAP writer and the bag topic mapping; replay and comparison; the Python companion (ruff, mypy strict, pytest, Ubuntu and Windows, Python 3.10 and 3.13). Exported bags are read back in CI by rosbag-inspect and by ROS 2 Humble (`ros2 bag info`, every message deserialized by `rosbag2_py` + `rclpy` and compared). Coverage of `src/core` 99.5 % lines / 94.6 % branches with thresholds enforced. Headless Chrome job: every example, builder, simulation, and the live view against the fake server (connect by click, opt-in, drive, release, blur; the server's log is checked) and a replay with the comparison, with no console errors. |
+| **Simulation**     | Yes, labelled as model output in every panel, plot, export and CLI report, and now in bags (`/robot_studio/source`, MCAP metadata), imported recordings and replays ("Replay: SIMULATED data") and the comparison ("vs a SIMULATED recording (not a robot)"). The round trip simulation → bag → import → replay keeps every value (details in [docs/ros2.md](docs/ros2.md#how-it-is-checked)). Simulation results and cross-checks as in [docs/simulation.md](docs/simulation.md); comparisons between models, not validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **Hardware**       | None. No robot has been connected over rosbridge, nothing has been driven, no bag recorded from a robot has been read, and no exported package or simulated parameter has been checked on a robot. The steps for the owner's MentorPi are in [docs/ros2.md](docs/ros2.md#for-the-robots-owner-mentorpi); this row stays empty until they are done and recorded here with the date, commit and what was observed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ## How it compares
 
@@ -471,12 +485,14 @@ node scripts/sim-fixtures.js --check      # simulator fixtures and the golden di
 python scripts/firmware_interop.py       # with odobridge (encoder-odometry-firmware host) installed
 node scripts/lsl-crosscheck.mjs --lsl ../lidar-slam-lab   # estimators vs lidar-slam-lab's benchmark
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --sim --sim-interact
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --keyboard --axe   # accessibility
+node scripts/large-model.mjs -o large.zip    # then --upload large.zip --max-open-ms 10000 (performance budget)
 # ROS 2
 node scripts/bag-fixtures.js --check && node scripts/rosbridge-fixtures.js --check
 node scripts/fake-rosbridge.mjs --port 9090 --fixture tests/fixtures/rosbridge/sim_mecanum.jsonl \
   --description tests/fixtures/rosbridge/robot_description.urdf --log rb.jsonl &
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --ros ws://127.0.0.1:9090 --ros-log rb.jsonl
-(cd python && pip install -e ".[dev]" && ruff check . && mypy && pytest)   # companion, pulls rosbag-inspect v0.2.0
+(cd python && pip install -e ".[dev]" && ruff check . && mypy && pytest)   # companion, pulls rosbag-inspect v0.3.0
 node bin/robot-studio.js sim mecanum --out run --bag bag && robot-studio-bag bag imported
 node scripts/bag-roundtrip.mjs --original run --imported imported
 ```
@@ -506,9 +522,9 @@ node scripts/bag-roundtrip.mjs --original run --imported imported
   flat floor without dynamics; slip is a random process, not friction;
   mecanum rollers are not modelled one by one; one LiDAR, no motion
   distortion; the depth camera is geometry only and not recorded;
-  lidar-slam-lab's MCL has no heading-bias term and reads a strafe as two
-  rotations (with TurtleBot3's short-range LiDAR it lost track in the corridor
-  loop in one documented run); scan matching has no loop closure. Headless
+  MCL has no heading-drift model and, with recovery off (the default since
+  1.0, which fixed the TurtleBot3 corridor case), does not recover once it
+  has lost the robot; scan matching has no loop closure. Headless
   browsers render on the CPU (10 to 14 fps), so the CI browser job checks
   results, not frame rate. Full list in [docs/simulation.md](docs/simulation.md#limitations).
 
@@ -516,8 +532,9 @@ node scripts/bag-roundtrip.mjs --original run --imported imported
   others on the robot); `/cmd_vel` is a `Twist`; one LiDAR; the live view
   does not run MCL or draw the robot's own `map` frame; a browser cannot
   stop a robot over a lost connection, so the robot needs its own cmd_vel
-  timeout; the https live site cannot reach `ws://` on another machine (run
-  the studio locally). Full list in [docs/ros2.md](docs/ros2.md#limitations).
+  timeout; from the https live site the browser decides whether `ws://` to
+  the robot is allowed (Chrome and Edge ask; Firefox and Safari block
+  private addresses), so `robot-studio studio` is the reliable route. Full list in [docs/ros2.md](docs/ros2.md#limitations).
 
 ## License
 

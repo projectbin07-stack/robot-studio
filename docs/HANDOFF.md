@@ -1,9 +1,8 @@
 # Handoff
 
-State of Robot Studio after milestone 4 (v0.4.0), for whoever builds
-milestone 5. Read [decisions.md](decisions.md) first, then
-[builder.md](builder.md), [simulation.md](simulation.md) and
-[ros2.md](ros2.md).
+State of Robot Studio after milestone 5 (v1.0.0), for whoever works on it
+next. Read [decisions.md](decisions.md) first, then the feature pages listed
+in [docs/README.md](README.md).
 
 ## Status
 
@@ -25,15 +24,23 @@ milestone 5. Read [decisions.md](decisions.md) first, then
   [ROADMAP.md](ROADMAP.md#milestone-3-simulation-v030-done).
 - Milestone 4 scope is implemented: rosbridge live view and `/cmd_vel`
   behind a dead-man switch, ROS 2 bag (MCAP) export, `robot-studio-bag`
-  (Python, over rosbag-inspect v0.2.0) for bag import, replay through the
+  (Python, over rosbag-inspect, now v0.3.0) for bag import, replay through the
   estimators, simulation-vs-recording comparison. Criterion 7 (hardware)
   is not met. Status of each criterion in
   [ROADMAP.md](ROADMAP.md#milestone-4-ros-2-v040-criteria-1-6-met-7-not-met).
+- Milestone 5 scope is implemented: documentation pages with screenshots
+  from the live site, keyboard operation and axe-core in CI, the 200-link
+  performance budget, upstream fixes released and the pins moved, the
+  first-run panel and guided example, `robot-studio studio`. Status in
+  [ROADMAP.md](ROADMAP.md#milestone-5-release-polish-v100-done).
 - Validation: software tests; simulation (model output, labelled
   simulated, including bags, replays and comparisons made from it);
   hardware none.
-- Vendored: urdf-inspector **v0.1.1**, lidar-slam-lab **v0.1.0** (commits in
-  `vendor/manifest.json`), three.js **0.187.0**.
+- Vendored: urdf-inspector **v0.2.0**, lidar-slam-lab **v0.2.1** (commits in
+  `vendor/manifest.json`), three.js **0.187.0**, axe-core **4.14.0** (browser
+  tests only, not published). Pinned elsewhere: rosbag-inspect **v0.3.0**
+  (`python/pyproject.toml`), odobridge **v0.2.0**, mecanum-kinematics
+  **v0.1.0** (CI install lines).
 
 ## Module map
 
@@ -73,7 +80,7 @@ src/core/                      DOM-free, tested in Node, coverage-gated
   sim/world.js                 worlds with heights, bundled worlds, JSON and link encodings
   sim/imu.js                   IMU error model, imu-calibration-lab JSON and Gazebo noise import
   sim/depth.js                 depth camera point cloud
-  sim/estimators.js            wheel odometry + scan matching + MCL over lidar-slam-lab, virtual scans
+  sim/estimators.js            wheel odometry + scan matching + MCL over lidar-slam-lab, scans with their mount as origin
   sim/reference.js             lidar-slam-lab's own experiment through the wrapper (cross-check)
   sim/sim.js                   the fixed-step loop: createSim(), step()
   sim/routes.js                demo (autopilot), square, spin, none
@@ -93,6 +100,7 @@ src/core/                      DOM-free, tested in Node, coverage-gated
   ros/recording.js             recording files -> numbers (bounded, checked)
   ros/replay.js                ReplaySession over a recording
   ros/compare.js               command schedule, runSchedule(), compareRecordings()
+  treenav.js                   arrow-key movement in the kinematic tree (WAI-ARIA tree view)
 src/ui/                        browser only (not coverage-gated)
   app.js                       DOM wiring, panels, selection, URL updates, builder session
   builder.js                   template form and properties panel (DOM only)
@@ -105,11 +113,14 @@ src/ui/                        browser only (not coverage-gated)
   rosui.js                     ROS 2 panel: live robot, driving, replay, comparison
   plots.js                     canvas time plots
   worldedit.js                 top-down world editor
+  welcome.js                   first-run "Start here" panel and the four-step guided example
 src/node/nodefs.js             real-file-system XacroFs for the CLI and tests
+src/node/serve.js              127.0.0.1-only static server (studio command, scripts/serve.js)
+src/studiocli.js               the `studio` command (one-command local launch)
 src/cli.js, bin/robot-studio.js  CLI
 src/simcli.js                  the `sim` command (and --bag)
 src/roscli.js                  the `bag`, `replay` and `compare` commands
-python/                        robot-studio-bag: ROS 2 bag -> recording (uses rosbag-inspect v0.2.0)
+python/                        robot-studio-bag: ROS 2 bag -> recording (uses rosbag-inspect v0.3.0)
 vendor/                        vendored code + manifest.json (never edit)
 examples/studio_mecanum/       our illustrative model (4 xacro files, STL + OBJ)
 examples/third_party/          TurtleBot3, urdf_tutorial, ros2_control_demos (unmodified, with licences)
@@ -121,7 +132,8 @@ scripts/                       vendor.mjs, xacro_golden.py, browser-smoke.mjs, s
                                builder-fixtures.js, mecanum_interop.py, ros2_package_check.sh,
                                sim-fixtures.js, firmware_interop.py, lsl-crosscheck.mjs,
                                fake-rosbridge.mjs, rosbridge-fixtures.js, bag-fixtures.js,
-                               bag-roundtrip.mjs, check_scan_export.py, ros2_bag_check.sh, ros2_bag_verify.py
+                               bag-roundtrip.mjs, check_scan_export.py, ros2_bag_check.sh, ros2_bag_verify.py,
+                               large-model.mjs (performance budget input), loopback-buffer.mjs (diagnostic)
 ```
 
 ## How to run everything
@@ -157,16 +169,28 @@ node bin/robot-studio.js new mecanum -f package -o pkg.zip   # CI builds such zi
 # simulation
 node bin/robot-studio.js sim mecanum --world office --route demo --seconds 60 --seed 1 --out run/
 node scripts/sim-fixtures.js [--check]       # fixtures for the cross-checks and the golden digest
-PYTHONPATH=../encoder-odometry-firmware/host/src python scripts/firmware_interop.py   # CI installs odobridge v0.1.0
+PYTHONPATH=../encoder-odometry-firmware/host/src python scripts/firmware_interop.py   # CI installs odobridge v0.2.0
 node scripts/lsl-crosscheck.mjs --lsl ../lidar-slam-lab [--seeds 5] [--full-seeds 1]  # about 15 min locally
 node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --template mecanum --sim --sim-world lab --screenshot sim.png
 node scripts/browser-smoke.mjs ... --headed --gpu   # visible window with the GPU, for frame rates
+
+# accessibility, first run, performance budget (all in the CI browser job)
+node scripts/browser-smoke.mjs --url "http://127.0.0.1:8000/?theme=dark" --keyboard --axe --axe-report axe.json
+node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ --tour --shots first-run
+node scripts/large-model.mjs -o large.zip && node scripts/browser-smoke.mjs --url http://127.0.0.1:8000/ \
+  --upload large.zip --expect-links 200 --expect-summary "meshes 200/200 shown" --max-open-ms 10000 --timeout 180000
+
+# the page from this computer, for a robot on the LAN (also: npx github:projectbin07-stack/robot-studio studio)
+node bin/robot-studio.js studio --ros 192.168.1.20
+# from the live site with the local network permission granted (what "Allow" does), against the fake server:
+node scripts/browser-smoke.mjs --url https://projectbin07-stack.github.io/robot-studio/ --template mecanum \
+  --ros ws://127.0.0.1:9090 --grant-local-network
 
 # ROS 2
 node bin/robot-studio.js sim mecanum --out run --bag bag    # or: node bin/robot-studio.js bag run -o bag
 node scripts/bag-fixtures.js [--check]        # python/tests/fixtures/sim_mecanum (bag + recording)
 node scripts/rosbridge-fixtures.js [--check]  # tests/fixtures/rosbridge (fake server messages)
-python -m venv ../.venv-rsbag && ../.venv-rsbag/Scripts/pip install -e "python[dev]"   # pulls rosbag-inspect v0.2.0
+python -m venv ../.venv-rsbag && ../.venv-rsbag/Scripts/pip install -e "python[dev]"   # pulls rosbag-inspect v0.3.0
 ../.venv-rsbag/Scripts/robot-studio-bag bag imported
 node scripts/bag-roundtrip.mjs --original run --imported imported
 node bin/robot-studio.js replay imported && node bin/robot-studio.js compare imported mecanum
@@ -197,11 +221,8 @@ taken.
 - A world: add it to `WORLDS` in `src/core/sim/world.js` (the tests
   round-trip every bundled world).
 
-## Milestone 5 starting points
+## Next steps
 
-- The ROADMAP's milestone 5: documentation pages with screenshots taken in
-  CI, an accessibility pass with an automated check, a performance budget,
-  and upstream fixes with the vendored pins moved.
 - Hardware (milestone 4, criterion 7) is still open and needs the owner:
   the steps are in [ros2.md](ros2.md#for-the-robots-owner-mentorpi). When a
   MentorPi bag exists, run it through `robot-studio-bag`, `replay` and
@@ -210,13 +231,14 @@ taken.
 - The ROS 2 panel's elements (`#ros-url`, `#ros-connect`, `#ros-drive-confirm`,
   `#ros-arm`, `#ros-replay-file`, `#ros-compare`) and `document.body.dataset`
   values (`ros`, `rosScans`, `rosDrive`, `rosSent`, `replayT`, `replayDone`,
-  `compareRows`) are what the browser smoke scenarios use; keep them or
-  update `scripts/browser-smoke.mjs` with them.
-- Accessibility: the drive banner and the topic table are plain text; the
-  panel's controls are buttons and labelled inputs, but nothing has been
-  checked with a screen reader or an automated tool yet.
-- Upstream: rosbag-inspect v0.2.0 is pinned in `python/pyproject.toml`;
-  finding 54's per-topic Hz for MCAP is still open there.
+  `compareRows`, `readyAt`, `welcome`, `tourStep`) are what the browser
+  smoke scenarios use; keep them or update `scripts/browser-smoke.mjs`.
+- Screenshots in `docs/img/live/` come from the Pages workflow's
+  `screenshots` job: download the `docs-screenshots` artifact of a deploy,
+  look at each picture, then copy it. Do not commit ones you have not seen.
+- A screen reader pass has not been done ([accessibility.md](accessibility.md)).
+- New UI must keep axe-core at zero violations (the browser job fails
+  otherwise) and keep every control reachable with Tab.
 
 ## How ROS 2 hangs together
 
@@ -234,17 +256,23 @@ taken.
 - The dead-man gate is the only path to `/cmd_vel`; the page never
   publishes anything else.
 - `tests/rosbridge.test.js` runs real WebSocket connections on 127.0.0.1;
-  under heavy parallel load the waits allow 15 s. On Linux CI runners
-  (Node 22 and 24, three runs) a single message sent by the fake server
-  while its fixture replay was streaming (a test scan, then a service
-  reply) was not seen by the client within 15-20 s, while the same tests
-  passed on Windows CI and locally, even six in parallel. The cause was not
-  found (the fake server now also drops replayed data for a client whose
-  socket buffer is full). The live-view test therefore stops the replay
-  and waits for the client to drain before its service calls, and hands
-  the rejected-scan message to the client directly; the network path of
-  bad messages and replies is covered by the malformed-message test, which
-  has no replay. Worth investigating if live views ever miss replies.
+  under heavy parallel load the waits allow 15 s. In 0.4.0, on Linux CI
+  runners only, a single message the fake server sent while its fixture
+  replay was streaming (a test scan, then a service reply) was not seen by
+  the client within 15-20 s. The explanation found in milestone 5: the fake
+  server drops replayed data for a slow client only once Node's own write
+  queue for it passes 64 KiB, and everything below that sits in the
+  operating system's socket buffers, ahead of any later message.
+  `scripts/loopback-buffer.mjs` (run in every CI test job) measures how much
+  a loopback connection with a paused reader holds before that point:
+  2688 KiB on the `ubuntu-latest` runners (about 30 s of the fixture replay, which runs at about 90 KiB/s) against 128 KiB on the `windows-latest` runners (about 1.4 s) and 240 KiB on the development machine (Windows 11). When the test process falls behind the replay's real-time
+  rate under parallel load, a Linux connection can queue many seconds of
+  replay ahead of the reply; a Windows one cannot. The mechanism is
+  measured; that the test process was falling behind on those runs is
+  inferred, not observed. The live-view test keeps stopping the replay and
+  letting the client drain before its service calls. A live view on a real
+  robot over a slow link could see the same delay; rosbridge's own
+  `queue_length` / throttling on the robot side is the place to bound it.
 
 ## How the simulation hangs together
 
@@ -266,13 +294,17 @@ taken.
 ## Known issues
 
 - ROS 2: see [ros2.md](ros2.md#limitations) (no hardware validation, fixed
-  topic names, one LiDAR, no MCL or robot `map` frame in the live view, the
-  https site cannot reach `ws://` on another machine).
+  topic names, one LiDAR, no MCL or robot `map` frame in the live view).
 
 - Simulation: see [simulation.md](simulation.md#limitations) (2D motion only,
-  one LiDAR, lidar-slam-lab's MCL motion model has no heading bias and reads
-  a strafe as two rotations, scan matching has no loop closure).
+  one LiDAR, MCL has no heading-drift model and does not recover once lost
+  with recovery off, scan matching has no loop closure).
 
+- From the https live site the browser may not reach `ws://` on the robot:
+  Chrome and Edge ask for local network access (IP addresses and `.local`),
+  Firefox allows only 127.0.0.1, Safari none; `robot-studio studio` avoids
+  this ([ros2.md](ros2.md#reaching-a-robot-from-the-live-site)).
+- No screen reader has been used on the page.
 - `xacro.load_yaml` is not implemented (no YAML reader); descriptions that
   need it stop with a clear error.
 - Python comprehensions, lambda, f-strings and a few builtins are not
@@ -284,15 +316,13 @@ taken.
 - The camera is framed on rough bounds first and re-framed on the real
   bounding box once meshes have loaded; the helper sizes (axes, centre of
   mass marker) use the rough size.
-- Large models: every mesh is loaded at once; no level of detail.
-- The page has no automated accessibility check yet.
+- Large models: every mesh is loaded at once; no level of detail (the
+  200-link, 51 MB budget model opens in 2.8 s in CI).
 - Builder: no transform gizmo (numeric fields only); mimic and dynamics
   have no fields in the Properties panel (the operations support them);
   importing a xacro file imports its expansion (macros and properties are
   not kept); after a reload an imported robot's meshes are placeholders
   until its files are opened again; the differential template has no
-  mecanum-kinematics export (that library models mecanum bases only);
-  re-rendering the template form after a parameter edit moves keyboard
-  focus out of it.
+  mecanum-kinematics export (that library models mecanum bases only).
 - urdf-inspector requests are listed in
   [upstream-requests.md](upstream-requests.md).
