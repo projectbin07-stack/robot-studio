@@ -88,7 +88,7 @@ jobs:
           S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome --timeout 240000"
           $S --url "$L" --theme light --tour --shots shots/first-run
           $S --url "${L}?theme=light" --select-link base_link --expect-links 11 --screenshot shots/model.png
-          $S --url "${L}?theme=light" --template arm --select-link link_3 --expect-links 9 --screenshot shots/builder.png
+          $S --url "${L}?theme=light" --template mecanum --select-link front_left_wheel --expect-links 10 --screenshot shots/builder.png
           $S --url "${L}?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 20 --expect-links 10 --screenshot shots/simulation.png
           $S --url "${L}?theme=light" --template mecanum --ros ws://127.0.0.1:9090 --grant-local-network --ros-keep-armed --ros-log rb.jsonl --expect-links 10 --screenshot shots/ros2-live.png
           $S --url "${L}?theme=light" --template mecanum --replay rec.zip --expect-links 10 --screenshot shots/ros2-replay.png
