@@ -42,6 +42,9 @@ jobs:
       - name: Test with coverage thresholds (src/core)
         run: npm run coverage
 
+      - name: "Diagnostic: data a loopback connection holds for a slow reader on this OS (see docs/HANDOFF.md)"
+        run: node scripts/loopback-buffer.mjs
+
       - name: CLI smoke test
         shell: bash
         run: |
