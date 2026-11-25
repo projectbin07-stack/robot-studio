@@ -15,6 +15,7 @@ import { mecanumConfig } from "./core/builder/drive.js";
 import { modelFromDoc } from "./core/builder/editor.js";
 import { simCommand } from "./simcli.js";
 import { rosCommand } from "./roscli.js";
+import { studioCommand } from "./studiocli.js";
 
 /**
  * @typedef {object} CliIo
@@ -42,6 +43,7 @@ Usage:
   robot-studio bag <recording-dir> -o <bag-dir>
   robot-studio replay <recording-dir> [--json]
   robot-studio compare <recording-dir> <robot.urdf|robot.xacro|template> [--json]
+  robot-studio studio [--ros ws://robot:9090] [--port 8000] [--no-open]
   robot-studio --help | --version
 
 xacro     expand a xacro file the way the official xacro does and print the
@@ -62,6 +64,8 @@ replay    replay a recording (simulated, or a bag imported with the Python
           companion robot-studio-bag) through the estimators
 compare   run a recording's command schedule on the simulator and compare
           the firmware telemetry (ODOMETRY, WHEEL_STATE) of both runs
+studio    serve the page from this computer (127.0.0.1) and open the browser,
+          for connecting to a robot on the local network ('studio --help')
 
   --format F           (new, export) urdf (default), xacro, toml (four-wheel
                        mecanum bases: mecanum-kinematics config) or package
@@ -77,7 +81,8 @@ Options for xacro, check and export:
 
 Exit codes: 0 no errors (and no warnings with --strict), 1 warnings with
 --strict, 2 xacro failed or the model has errors, 3 usage or file error.
-Nothing is uploaded anywhere and no network connection is made.
+Nothing is uploaded anywhere and no network connection is made (studio
+serves the page on 127.0.0.1 only; the page connects only when you click).
 `;
 
 class UsageError extends Error {}
@@ -111,6 +116,11 @@ export function main(argv, io) {
       readText: io.readText ?? (() => ""),
       mkdir: io.mkdir ?? (() => {}),
     });
+  if (argv[0] === "studio")
+    return studioCommand(argv.slice(1), io).then(
+      (r) => (typeof r === "number" ? r : new Promise(() => {})),
+      fail,
+    );
   if (argv[0] === "sim")
     return simCommand(argv.slice(1), {
       ...io,
