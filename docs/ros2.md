@@ -1,4 +1,4 @@
-# ROS 2 (milestone 4)
+# ROS 2
 
 Robot Studio talks to ROS 2 in three ways: a **live robot** over rosbridge
 (view its data, drive it from the teleop), **bags** (a simulated run written
@@ -15,7 +15,17 @@ Hardware: **none yet**. No real robot has been connected and no bag from a
 robot has been read; the steps for the owner's MentorPi are in
 [For the robot's owner](#for-the-robots-owner-mentorpi).
 
+![The ROS 2 panel connected from the live https site to the fake rosbridge server on the CI runner, which replays simulated fixture data (not a robot); driving armed](img/live/ros2-live.png)
+
+_Screenshot from the live site (Pages workflow, `screenshots` job): the
+browser's local network permission was granted over DevTools, and the
+"robot" is the in-repo fake rosbridge server replaying a simulated run. The
+LIVE label is what the page shows for any rosbridge connection._
+
+![A simulated recording replayed in the ROS 2 panel, with the comparison against the simulator](img/live/ros2-replay.png)
+
 - [Live robot over rosbridge](#live-robot-over-rosbridge)
+- [Reaching a robot from the live site](#reaching-a-robot-from-the-live-site)
 - [Driving: cmd_vel and the dead-man switch](#driving-cmd_vel-and-the-dead-man-switch)
 - [Bag export](#bag-export)
 - [Bag import: robot-studio-bag](#bag-import-robot-studio-bag)
@@ -69,21 +79,81 @@ error measures. The panel's table shows each topic's rate over the last 2 s,
 message count, age of the last message and how many messages failed the
 checks (hover for the reason).
 
-**The browser has to be allowed to connect.** The live site is served over
-https, and browsers block unencrypted `ws://` connections from an https page
-to other machines (mixed content); only `ws://localhost` / `127.0.0.1` is
-allowed. To reach a robot, either open the studio from a local copy over
-http (`node scripts/serve.js`, below), or give rosbridge_server a certificate
-and use `wss://` (its `ssl`, `certfile` and `keyfile` launch arguments).
-Chromium-based browsers also block a public https page from reaching
-local or private addresses (Local Network Access) unless the user allows it
-when asked: from the live site, headless Edge refused even
-`ws://127.0.0.1:9090` (`net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS`),
-and the page warns about this. The local copy avoids both checks. (The
-screenshots of the live view were taken from the live site with that check
-turned off in the headless browser, `--allow-local-network` in
-`scripts/browser-smoke.mjs`, connected to the fake server on the same
-machine.)
+### Reaching a robot from the live site
+
+The live site is a public https page; the robot's rosbridge_server speaks
+plain `ws://` on the local network. Browsers treat that combination
+specially (milestone 5 research and tests, November 2026):
+
+- **Chrome and Edge (Chromium 147 or later)** apply Local Network Access
+  (LNA) to WebSockets: a public page that opens `ws://` to a loopback
+  address (`127.0.0.1`, `localhost`), a private address (`192.168.x.x`,
+  `10.x.x.x`, `172.16-31.x.x`) or a `.local` name gets a permission prompt
+  ("access other apps and services on this device" / "devices on your
+  local network"), and such `ws://` is exempt from mixed-content blocking.
+  A host _name_ that resolves to a LAN address is not exempt: use the IP
+  address, a `.local` name or `wss://`. Sources: the Chrome Platform Status
+  entries [5152728072060928](https://chromestatus.com/feature/5152728072060928)
+  (LNA, Chrome 142) and [5197681148428288](https://chromestatus.com/feature/5197681148428288)
+  (WebSockets, Chrome 147), Chrome's
+  [LNA guide](https://developer.chrome.com/docs/modern-web-guidance/guides/security/local-network-access),
+  Microsoft's [Edge LNA page](https://learn.microsoft.com/en-us/deployedge/ms-edge-local-network-access).
+- **Firefox** (154 or later, per its release notes) allows `ws://127.0.0.1`
+  from an https page behind its own local-network prompt, but still blocks
+  `ws://192.168.x.x` as mixed content
+  ([bug 2081728](https://bugzilla.mozilla.org/show_bug.cgi?id=2081728)).
+- **Safari** treats loopback and private `ws://` from https as mixed content
+  ([WebKit bug 171934](https://bugs.webkit.org/show_bug.cgi?id=171934)).
+
+**What was tested** (the live site at
+`https://projectbin07-stack.github.io/robot-studio/`, the fake rosbridge
+server replaying simulated fixtures, `scripts/browser-smoke.mjs`, headless,
+Windows 11, November 2026):
+
+| Browser              | Target                    | Not allowed                                                | Permission granted\*   |
+| -------------------- | ------------------------- | ---------------------------------------------------------- | ---------------------- |
+| Edge 158.0.4370.33   | `ws://127.0.0.1:9091`     | blocked, `net::ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS` | connected, scans shown |
+| Edge 158.0.4370.33   | `ws://192.168.29.26:9092` | blocked, same error                                        | connected, scans shown |
+| Chrome 157.0.8103.79 | `ws://127.0.0.1:9091`     | blocked, same error                                        | connected, scans shown |
+| Chrome 157.0.8103.79 | `ws://192.168.29.26:9092` | blocked, same error                                        | connected, scans shown |
+
+\* granted over DevTools (`Browser.grantPermissions` with
+`loopbackNetwork` and `localNetwork`, `--grant-local-network` in the smoke
+script), which is what the prompt's **Allow** sets. A headless browser
+cannot show the prompt, so it denies; the prompt itself (its wording, that
+it appears on the first Connect) was **not** seen in these tests, and
+Firefox and Safari were not tested. The CI job that takes the
+documentation screenshots connects from the live site the same way on
+Linux Chrome (its version is in the job's output).
+
+**So, from the live site:** enter the robot's IP address (not a DNS name)
+and press Connect; Chrome or Edge asks to allow local network access:
+allow it. If it was denied once, the browser does not ask again; the panel
+says so and the permission can be reset in the site settings (the icon left
+of the address bar).
+
+**The simplest reliable route: run the studio on your computer.** One
+command serves the same page from `127.0.0.1` and opens it with the
+robot's address filled in (Node 22 or newer; nothing to install
+permanently):
+
+```bash
+npx github:projectbin07-stack/robot-studio studio --ros 192.168.1.20
+# or in a clone: node bin/robot-studio.js studio --ros 192.168.1.20
+```
+
+A page served from this computer is not a public https page, so there is
+neither a mixed-content block nor a permission prompt: tested with Edge
+158 and Chrome 157 (headless) reaching the fake server on
+`ws://192.168.29.26:9092` from `http://127.0.0.1:8791/` with no permission
+granted. The server listens on 127.0.0.1 only and serves the page's own
+files ([cli.md](cli.md#connecting-to-a-robot-studio)).
+
+**wss://** works from the live site in every browser if rosbridge_server
+has a certificate the browser trusts for the exact name or IP used (its
+`ssl:=true certfile:=... keyfile:=...` launch arguments). A self-signed
+certificate must be trusted on each client first; this route was not
+tested here.
 
 ## Driving: cmd_vel and the dead-man switch
 
@@ -152,7 +222,7 @@ read a stamp of 0 as "not set" (tf2 as "latest"); the importer subtracts the
 bag's start again. The MCAP file also carries a `robot_studio` metadata
 record with `simulated: true`.
 
-The bag is read in CI by rosbag-inspect v0.2.0 (`info`, `check`, `export
+The bag is read in CI by rosbag-inspect v0.3.0 (`info`, `check`, `export
 --arrays`) and by ROS 2 Humble itself (`ros2 bag info`, then every message
 deserialized with `rosbag2_py` and `rclpy` into the installed Humble message
 classes and compared with the recording; `scripts/ros2_bag_verify.py`).
@@ -170,7 +240,7 @@ library, pinned to its **v0.2.0** tag (SQLite3 and MCAP storage, CDR,
 message definitions); it contains no storage or CDR code of its own.
 
 ```bash
-pip install "robot-studio-bag @ git+https://github.com/projectbin07-stack/robot-studio@v0.4.0#subdirectory=python"
+pip install "robot-studio-bag @ git+https://github.com/projectbin07-stack/robot-studio@v1.0.0#subdirectory=python"
 robot-studio-bag my_bag/ my_recording/          # --scan-topic, --odom-topic, --base-frame, ... to change names
 node bin/robot-studio.js replay my_recording/   # or zip the folder and open it in the ROS 2 panel
 ```
@@ -269,17 +339,18 @@ example its base listens on `/controller/cmd_vel`), relay them:
 `ros2 run topic_tools relay /cmd_vel /controller/cmd_vel` (and likewise for
 sensor topics, in the other direction).
 
-**On a laptop on the same network** (Node 22 or newer; the live site cannot
-reach `ws://` on the robot, see above):
+**On a laptop on the same network** (Node 22 or newer):
 
 ```bash
-git clone --branch v0.4.0 https://github.com/projectbin07-stack/robot-studio.git
-cd robot-studio
-node scripts/serve.js                                # http://127.0.0.1:8000/
+npx github:projectbin07-stack/robot-studio studio --ros <robot-ip>
 ```
 
-1. Open `http://127.0.0.1:8000/?ros=ws://<robot-ip>:9090`, open the ROS 2
-   panel and press **Connect**. The topic table should show rates for every
+This opens the studio from the laptop with the address filled in (see
+[Reaching a robot from the live site](#reaching-a-robot-from-the-live-site);
+the live site with Chrome or Edge and the local network permission is the
+other route).
+
+1. Open the ROS 2 panel and press **Connect**. The topic table should show rates for every
    topic; the HUD says LIVE.
 2. Press **Use the robot's robot_description** (or open the MentorPi's
    description package folder with "Open files", which also brings its

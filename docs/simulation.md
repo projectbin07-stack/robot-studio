@@ -1,4 +1,4 @@
-# Simulation (milestone 3)
+# Simulation
 
 Robot Studio drives the robot you opened or built in a 2D world with
 heights, simulates its wheels, encoders, IMU, 2D LiDAR and (optionally) a
@@ -12,6 +12,10 @@ comes from) or values you give; none of it is a measurement of a real
 robot, and agreement between the simulator and other projects' models is
 agreement between models, not validation against hardware. Every panel,
 plot, export and CLI report in the studio says "simulated".
+
+![The mecanum template driving the office demo route, 23 simulated seconds in: LiDAR returns, the map, trajectories, the error HUD and live plots, all labelled simulated](img/live/simulation.png)
+
+_Screenshot from the live site (Pages workflow, `screenshots` job)._
 
 - [How a step works](#how-a-step-works)
 - [The robot, read from the URDF](#the-robot-read-from-the-urdf)
@@ -172,20 +176,53 @@ modules, as lidar-slam-lab itself does (`estimators.js`):
   so far from the estimate itself (`integrateScan`).
 - **MCL** (`mcl.js`): a particle filter on the known floor plan (the
   obstacles the LiDAR can see), started around the true start pose, with
-  lidar-slam-lab's motion noise and augmented-MCL recovery.
+  lidar-slam-lab's motion noise. Since 1.0: lidar-slam-lab's
+  omnidirectional motion model on mecanum bases (setting
+  `estimators.mclOmni`), augmented-MCL recovery (random particles when the
+  fit drops) off while tracking (`estimators.mclRecovery`), and the
+  estimate taken before resampling (lidar-slam-lab 0.2.1).
 
-lidar-slam-lab assumes the LiDAR is at the robot's origin and the robot
-turns about it (its audit finding #27: no mount pose). Here the estimators
-track the drive frame (the robot's centre of rotation) and every scan is
-re-expressed as seen from that frame's origin: each return keeps its exact
-end point; only the free-space rays of the map start at the robot's centre
-instead of at the LiDAR. Tracking the LiDAR's own pose instead was tried
-first and failed: a turn on the spot moves an offset LiDAR a few millimetres
-sideways, which the rot1-trans-rot2 odometry model reads as two large
-rotations, and MCL scattered its particles (0.15 m RMS and 0.9 m jumps on
-the office route; 0.035 m RMS after the change). With the LiDAR at the
-origin, scans pass through unchanged and the call sequence is exactly
+The estimators track the drive frame (the robot's centre of rotation). The
+LiDAR sits where the URDF puts it: since lidar-slam-lab 0.2.0 a scan carries
+its sensor's pose in the robot frame (`scan.origin`), and the grid, scan
+matching and MCL cast its beams from there (ecosystem audit finding 27).
+Up to 0.4 the studio re-expressed every scan from the drive frame's origin
+instead, so the map's free-space rays started at the robot's centre.
+(Tracking the LiDAR's own pose had been tried first and failed: a turn on
+the spot moves an offset LiDAR a few millimetres sideways, which the
+rot1-trans-rot2 model reads as two large rotations.) With the LiDAR at the
+origin and lidar-slam-lab's own MCL settings, the call sequence is exactly
 lidar-slam-lab's `sim.js` step, which a test checks number for number.
+
+What the 1.0 changes did, before (0.4.0) and after, MCL position RMS for
+seeds 1 to 8, measured on the development machine with the CLI:
+
+| Run                                            | 0.4.0                                             | 1.0                                               |
+| ---------------------------------------------- | ------------------------------------------------- | ------------------------------------------------- |
+| TurtleBot3 Burger, loop, demo, 60 s            | 5.956 0.187 2.435 0.231 7.123 7.438 0.174 0.129 m | 0.088 0.068 0.109 0.129 0.089 0.168 0.067 0.063 m |
+| TurtleBot3 Burger, loop, demo, 20 s, seed 1    | 5.455 m                                           | 0.120 m                                           |
+| mecanum template, lab, square (strafes), 40 s  | 0.231 to 0.237 m                                  | 0.017 to 0.030 m                                  |
+| differential template, lab, square, 40 s       | 0.131 to 0.155 m                                  | 0.027 to 0.075 m                                  |
+| mecanum template, office, demo, 60 s           | 0.032 to 0.040 m                                  | 0.032 to 0.043 m                                  |
+| replay of a differential lab run, 20 s, seed 2 | 0.200 m (scan matching 0.024 m)                   | 0.021 m (scan matching 0.022 m)                   |
+
+Why: with recovery on, augmented MCL replaced particles with random ones
+whenever the fit dropped, and in the corridor loop with TurtleBot3's 3.5 m
+LiDAR and its heading drift some landed on a similar-looking place and won
+(turning recovery off alone gives the 1.0 TurtleBot3 numbers). On the lab
+squares the error stayed at the same value for every seed: the reported
+pose was taken after resampling, when the injected particles counted fully
+in the mean; lidar-slam-lab 0.2.1 takes it before resampling (with recovery
+on and that fix, the mecanum square is 0.024 to 0.033 m). The
+omnidirectional model matters most without good measurements: predicting
+1 m of backward driving in 2 cm steps, rot1-trans-rot2 leaves the particle
+mean at -0.37 m with a 1.0 m spread, the body-frame model at -1.00 m with
+0.01 m (lidar-slam-lab's test); in these runs it changes the mecanum
+numbers by a few millimetres. Scan matching moved by up to ±0.03 m RMS per
+seed because the map's free-space rays now start at the LiDAR (office demo,
+seeds 1 to 8: 0.052 to 0.098 m before, 0.052 to 0.090 m after). Recovery
+stays available for a robot that may be kidnapped (`estimators.mclRecovery`);
+with `estimators.mclGlobal` the particles start spread over the map.
 
 Error measures (position error of each estimate against the truth, current,
 RMS over all scans, maximum) are taken at the drive frame. The odometry the
@@ -244,14 +281,15 @@ sensors   LiDAR lidar_link: 180 beams, 10.0 Hz, 0.12-8.0 m (settings)
 motion    25.99 m driven, 0 blocked step(s), 0 saturated step(s)
 position error   final     RMS       max
 wheel odometry     1.350 m   0.746 m   1.350 m
-+ scan matching    0.021 m   0.059 m   0.096 m   (100.0 % of matches accepted)
-MCL (300 particles) 0.034 m   0.035 m   0.046 m
-step time 1.200 ms per 10 ms step (8.3x real time; measured on this machine, not written to the files)
++ scan matching    0.044 m   0.062 m   0.083 m   (100.0 % of matches accepted)
+MCL (300 particles) 0.037 m   0.034 m   0.045 m
+step time 1.487 ms per 10 ms step (6.7x real time; measured on this machine, not written to the files)
 wrote     run/ (10 files)
 ```
 
-(The step time line is from a GitHub Actions Ubuntu runner; every other line
-is identical on the development machine and on every CI platform.)
+(The step time line is from the development machine, with a ROS 2 bag
+written in the same run; every other line is identical on every CI
+platform, which compare a golden digest of the files.)
 
 ```
 robot-studio sim <robot.urdf|robot.xacro|template> [options]
@@ -309,22 +347,23 @@ set".
 Defaults in `src/core/sim/settings.js`; set in the page (Sensors, drive and
 estimators), with `--set` in the CLI, or stored in the document / link:
 
-| Key                                                                                    | Default                         |                                             |
-| -------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------- |
-| `seed`                                                                                 | 1                               |                                             |
-| `lidar.beams`, `lidar.fovDeg`, `lidar.minRange`, `lidar.maxRange`                      | 180, 360, 0.12 m, 8 m           |                                             |
-| `lidar.rangeNoise`, `lidar.dropout`, `lidar.rateHz`                                    | 0.02 m, 0.03, 10 Hz             |                                             |
-| `lidar.useUrdf`                                                                        | true                            | Gazebo tag values override the above        |
-| `imu.rateHz`, `imu.useUrdf`, `imu.calibration`                                         | 100 Hz, true, none              |                                             |
-| `drive.ideal`                                                                          | false                           |                                             |
-| `drive.encoderPpr`, `drive.gearRatio`                                                  | 500, 19                         | 4 × PPR × ratio counts per wheel revolution |
-| `drive.maxWheelSpeed`                                                                  | 0 (= URDF limit)                | rad/s                                       |
-| `drive.motor.dutyPerRadS`, `.deadband`, `.tau`                                         | 0.034, 0.06, 0.08 s             |                                             |
-| `drive.pid.kp`, `.ki`, `.kd`, `.kff`, `.ks`, `.outputLimit`, `.slewRate`, `.dCutoffHz` | 0.02, 0.2, 0, 0.03, 0, 1, 4, 20 | firmware defaults                           |
-| `drive.slip`, `drive.slipStd`, `drive.slipTau`                                         | true, 0.02, 0.5 s               |                                             |
-| `drive.radiusErrorLeft`, `drive.radiusErrorRight`                                      | 0.003, −0.003                   |                                             |
-| `estimators.scanMatching`, `estimators.particles`, `estimators.mclGlobal`              | true, 300, false                | lidar-slam-lab's defaults                   |
-| `depth.enabled`, `.width`, `.height`, `.hfovDeg`, `.maxRange`, `.rateHz`               | true, 32, 24, 70°, 5 m, 2 Hz    |                                             |
+| Key                                                                                    | Default                         |                                                                                   |
+| -------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------- |
+| `seed`                                                                                 | 1                               |                                                                                   |
+| `lidar.beams`, `lidar.fovDeg`, `lidar.minRange`, `lidar.maxRange`                      | 180, 360, 0.12 m, 8 m           |                                                                                   |
+| `lidar.rangeNoise`, `lidar.dropout`, `lidar.rateHz`                                    | 0.02 m, 0.03, 10 Hz             |                                                                                   |
+| `lidar.useUrdf`                                                                        | true                            | Gazebo tag values override the above                                              |
+| `imu.rateHz`, `imu.useUrdf`, `imu.calibration`                                         | 100 Hz, true, none              |                                                                                   |
+| `drive.ideal`                                                                          | false                           |                                                                                   |
+| `drive.encoderPpr`, `drive.gearRatio`                                                  | 500, 19                         | 4 × PPR × ratio counts per wheel revolution                                       |
+| `drive.maxWheelSpeed`                                                                  | 0 (= URDF limit)                | rad/s                                                                             |
+| `drive.motor.dutyPerRadS`, `.deadband`, `.tau`                                         | 0.034, 0.06, 0.08 s             |                                                                                   |
+| `drive.pid.kp`, `.ki`, `.kd`, `.kff`, `.ks`, `.outputLimit`, `.slewRate`, `.dCutoffHz` | 0.02, 0.2, 0, 0.03, 0, 1, 4, 20 | firmware defaults                                                                 |
+| `drive.slip`, `drive.slipStd`, `drive.slipTau`                                         | true, 0.02, 0.5 s               |                                                                                   |
+| `drive.radiusErrorLeft`, `drive.radiusErrorRight`                                      | 0.003, −0.003                   |                                                                                   |
+| `estimators.scanMatching`, `estimators.particles`, `estimators.mclGlobal`              | true, 300, false                | lidar-slam-lab's defaults                                                         |
+| `estimators.mclOmni`, `estimators.mclRecovery`                                         | true, false                     | omnidirectional MCL motion model on mecanum bases; random-particle recovery (1.0) |
+| `depth.enabled`, `.width`, `.height`, `.hfovDeg`, `.maxRange`, `.rateHz`               | true, 32, 24, 70°, 5 m, 2 Hz    |                                                                                   |
 
 ## How it is checked
 
@@ -364,13 +403,13 @@ Cross-checks against the other projects' own code, in CI:
   `inverse_saturated()` loaded from the exported TOML: ideal wheels to
   4.9e-12 rad/s (the fixture's 12 significant digits) with the same
   saturation scale; the motor + PI model after 3 s to 6.1e-4 rad/s.
-- **encoder-odometry-firmware v0.1.0** (job `firmware-interop`): the same
+- **encoder-odometry-firmware v0.2.0** (job `firmware-interop`; the same firmware model as v0.1.0): the same
   6.5 s command schedule through odobridge's Python firmware model
   (`DriveController` + `SimulatedRobot`) and through the simulator, for the
   mecanum and the differential template: all 130 WHEEL_STATE and ODOMETRY
   frames agree, encoder counts and duty exactly, speeds to 4.9e-11 rad/s,
   poses to 4.8e-12 (the fixture's rounding).
-- **lidar-slam-lab v0.1.0** (job `lsl-crosscheck`): lidar-slam-lab's own
+- **lidar-slam-lab v0.2.1** (job `lsl-crosscheck`): lidar-slam-lab's own
   experiment run through Robot Studio's estimator wrapper reproduces every
   number of lidar-slam-lab's CLI `benchmark` (18 rows, 3 maps × 5 seeds and
   the means) exactly, which are also the numbers in lidar-slam-lab's
@@ -388,26 +427,29 @@ Cross-checks against the other projects' own code, in CI:
 
   ```
   map         seed  distance  time    wheel-odometry  scan-matching  MCL-tracking
-  office         1     66.5 m   154 s           1.730          0.059         0.036
+  office         1     66.5 m   154 s           1.730          0.054         0.035
   office         2     66.5 m   153 s           1.862          0.045         0.037
-  office         3     66.5 m   154 s           3.691          0.059         0.038
-  office         4     66.5 m   154 s           2.031          0.071         0.036
-  office         5     66.5 m   154 s           3.043          0.051         0.038
-  warehouse      1     78.1 m   168 s           2.787          0.819         0.031
-  warehouse      2     78.1 m   168 s           3.454          1.000         0.031
-  warehouse      3     78.1 m   168 s           4.712          0.747         0.026
-  warehouse      4     78.1 m   169 s           3.753          0.909         0.031
-  warehouse      5     78.1 m   168 s           4.234          1.130         0.029
-  loop           1     54.1 m   116 s           1.727          0.068         0.035
-  loop           2     54.1 m   116 s           2.548          0.039         0.034
-  loop           3     54.1 m   116 s           3.128          0.041         0.034
-  loop           4     54.1 m   116 s           2.272          0.039         0.037
-  loop           5     54.1 m   116 s           3.597          0.039         0.039
+  office         3     66.5 m   154 s           3.691          0.051         0.037
+  office         4     66.5 m   154 s           2.031          0.076         0.036
+  office         5     66.5 m   154 s           3.043          0.083         0.036
+  warehouse      1     78.1 m   168 s           2.787          1.309         0.032
+  warehouse      2     78.1 m   168 s           3.454          0.651         0.035
+  warehouse      3     78.1 m   168 s           4.712          1.332         0.028
+  warehouse      4     78.1 m   169 s           3.753          0.651         0.033
+  warehouse      5     78.1 m   168 s           4.234          0.854         0.032
+  loop           1     54.1 m   116 s           1.727          0.045         0.036
+  loop           2     54.1 m   116 s           2.548          0.039         0.036
+  loop           3     54.1 m   116 s           3.128          0.041         0.036
+  loop           4     54.1 m   116 s           2.272          0.040         0.041
+  loop           5     54.1 m   116 s           3.597          0.039         0.041
   ```
 
-  The same pattern as lidar-slam-lab's: scan matching around 5 cm in the
-  office and the loop and 0.75 to 1.1 m in the warehouse (identical shelf
-  rows), MCL 3 to 4 cm everywhere. The numbers differ because the odometry
+  (Re-run for 1.0 with the LiDAR mount as the scan origin and the 1.0 MCL
+  settings; in 0.4.0 scan matching was 0.045 to 0.071 m in the office,
+  0.747 to 1.130 m in the warehouse and 0.039 to 0.068 m in the loop.)
+  The same pattern as lidar-slam-lab's: scan matching around 4 to 8 cm in
+  the office and the loop and 0.65 to 1.33 m in the warehouse (identical
+  shelf rows), MCL 3 to 4 cm everywhere. The numbers differ because the odometry
   error comes from a different model (simulated slip and a ±0.3 % wheel
   radius error through the firmware's odometry instead of lidar-slam-lab's
   rot1-trans-rot2 noise; dead reckoning drifts less here, 1.7 to 4.7 m RMS
@@ -467,17 +509,15 @@ directory, and the table above was measured afterwards.
   magnetometer, no orientation output; acceleration comes from second
   differences at 100 Hz.
 - Depth camera: geometry only (no noise, image or recording).
-- lidar-slam-lab's MCL has no heading-bias term in its motion model and
-  re-localises by injecting random particles. With TurtleBot3 Burger (16 cm
-  wheel separation, so the default ±0.3 % radius error is 0.04 rad of heading
-  drift per metre) and its 3.5 m, 5 Hz LDS in the corridor loop, MCL jumped to
-  a similar-looking place after 6 s (seed 1: 5.5 m RMS over 20 s); with the
-  radius error at 0 it tracked (0.11 m RMS over 60 s). Its motion model also reads a
-  mecanum strafe as two 90° rotations, which inflates its rotation noise
-  while strafing. Both are listed in [upstream-requests.md](upstream-requests.md).
+- MCL has no model of a systematic heading drift; with recovery off (the
+  default since 1.0) a filter that has lost the robot does not recover by
+  itself (turn `estimators.mclRecovery` on, which brings back the corridor
+  failure described under [Estimators](#estimators)). A per-particle drift
+  term was tried in lidar-slam-lab during milestone 5 and did not help in
+  the TurtleBot3 corridor runs, so it was not released.
 - Scan matching has no loop closure (lidar-slam-lab's design): its error
   random-walks even with perfect odometry (0.13 m RMS after 60 s with ideal
   wheels on the office route).
 - The autopilot steers with the true pose.
 - The page keeps the first 10 simulated minutes for the recording.
-- No ROS connection or bag export yet (milestone 4).
+- The ROS 2 connection, bags and replays are in [ros2.md](ros2.md).

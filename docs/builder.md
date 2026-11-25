@@ -5,6 +5,10 @@ describes what the builder does, the formats it writes and how each export
 is checked. Validation tiers as everywhere in this project: everything here
 is **software-tested**; nothing has been run on a robot.
 
+![The mecanum template in the builder with the front left wheel selected: the Properties panel with its joint and inertial fields](img/live/builder.png)
+
+_Screenshot from the live site (Pages workflow, `screenshots` job)._
+
 ## Starting a robot
 
 - **From a template** (Build panel): pick a template, set its parameters,
