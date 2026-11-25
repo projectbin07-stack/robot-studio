@@ -17,6 +17,8 @@ robot has been read; the steps for the owner's MentorPi are in
 
 ![The ROS 2 panel connected from the live https site to the fake rosbridge server on the CI runner, which replays simulated fixture data (not a robot); driving armed](img/live/ros2-live.png)
 
+_No robot is connected in this picture: it is the in-repo fake rosbridge server replaying simulated data. The page labels any rosbridge connection "LIVE" because it cannot tell the difference._
+
 _Screenshot from the live site (Pages workflow, `screenshots` job): the
 browser's local network permission was granted over DevTools, and the
 "robot" is the in-repo fake rosbridge server replaying a simulated run. The
@@ -39,6 +41,8 @@ LIVE label is what the page shows for any rosbridge connection._
 ## Live robot over rosbridge
 
 ![Live view connected to the fake rosbridge server replaying simulated fixtures (not a robot)](img/ros-live-dark.png)
+
+_No robot is connected in this picture: it is the in-repo fake rosbridge server replaying simulated data. The page labels any rosbridge connection "LIVE" because it cannot tell the difference._
 
 The page has its own rosbridge v2 client (`src/core/ros/rosbridge.js`),
 written from the protocol specification (rosbridge_suite's
