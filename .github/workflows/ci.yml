@@ -153,7 +153,7 @@ jobs:
         with:
           node-version: "24"
       - name: Install odobridge (the firmware's host package and firmware model) from its release tag
-        run: python -m pip install "odobridge @ git+https://github.com/projectbin07-stack/encoder-odometry-firmware@v0.1.0#subdirectory=host"
+        run: python -m pip install "odobridge @ git+https://github.com/projectbin07-stack/encoder-odometry-firmware@v0.2.0#subdirectory=host"
       - name: The committed telemetry is what the simulator writes today
         run: node scripts/sim-fixtures.js --check
       - name: Replay the command schedule through the firmware model and compare every WHEEL_STATE and ODOMETRY frame
@@ -174,7 +174,7 @@ jobs:
         run: node scripts/lsl-crosscheck.mjs --lsl lsl --seeds 5 --full-seeds 1
 
   python-companion:
-    name: robot-studio-bag on ${{ matrix.os }} / Python ${{ matrix.python }} (rosbag-inspect v0.2.0)
+    name: robot-studio-bag on ${{ matrix.os }} / Python ${{ matrix.python }} (rosbag-inspect v0.3.0)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -189,7 +189,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - name: Install the companion with rosbag-inspect from its v0.2.0 tag
+      - name: Install the companion with rosbag-inspect from its v0.3.0 tag
         run: python -m pip install "./[dev]"
       - name: Lint, format, type check
         run: |
@@ -200,7 +200,7 @@ jobs:
         run: python -m pytest --cov --cov-report=term-missing --cov-fail-under=85
 
   bag-roundtrip:
-    name: "Round trip: simulation -> MCAP -> rosbag-inspect v0.2.0 -> robot-studio-bag -> replay, value by value"
+    name: "Round trip: simulation -> MCAP -> rosbag-inspect v0.3.0 -> robot-studio-bag -> replay, value by value"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -210,17 +210,20 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Install robot-studio-bag (pulls rosbag-inspect from its v0.2.0 tag)
+      - name: Install robot-studio-bag (pulls rosbag-inspect from its v0.3.0 tag)
         run: python -m pip install ./python
       - name: Simulate 60 s (mecanum, office) and 20 s (differential, lab); export both as bags
         run: |
           B=bin/robot-studio.js
           node $B sim mecanum --world office --route demo --seconds 60 --seed 1 --out mec/run --bag mec/bag
           node $B sim diff --world lab --route square --seconds 20 --seed 2 --out diff/run --bag diff/bag
-      - name: Read the bags back with rosbag-inspect (info, check, LaserScan arrays with export --arrays)
+      - name: Read the bags back with rosbag-inspect (info with per-topic Hz, check, LaserScan arrays with export --arrays)
         run: |
           rosbag-inspect --version
-          rosbag-inspect info mec/bag
+          rosbag-inspect info mec/bag | tee info.txt
+          # rosbag-inspect 0.3.0 shows per-topic rates for MCAP: the simulated scan is 10 Hz, the IMU 100 Hz.
+          grep -E "^ +/scan +[0-9]+ +10\.00 " info.txt
+          grep -E "^ +/imu +[0-9]+ +100\.00 " info.txt
           rosbag-inspect check mec/bag --expect /scan:10 --expect /imu:100 --expect /odom:20
           rosbag-inspect export mec/bag /scan scan.csv --arrays
           python scripts/check_scan_export.py scan.csv mec/run/scans.jsonl

@@ -13,7 +13,7 @@ authors = [{ name = "Navaneeth KG" }]
 keywords = ["ros2", "rosbag", "mcap", "lidar", "robot-studio"]
 dependencies = [
     # Bag reading, CDR decoding and message definitions; pinned to a release tag.
-    "rosbag-inspect @ git+https://github.com/projectbin07-stack/rosbag-inspect@v0.2.0",
+    "rosbag-inspect @ git+https://github.com/projectbin07-stack/rosbag-inspect@v0.3.0",
 ]
 
 [project.optional-dependencies]

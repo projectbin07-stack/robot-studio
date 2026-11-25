@@ -5,7 +5,7 @@ recording format, so the studio can replay it through its estimators and views
 (`robot-studio replay`, or the page's ROS 2 panel → Replay).
 
 Bags are read with [rosbag-inspect](https://github.com/projectbin07-stack/rosbag-inspect)
-(pinned to its `v0.2.0` tag): SQLite3 and MCAP storage, CDR decoding, message definitions from
+(pinned to its `v0.3.0` tag): SQLite3 and MCAP storage, CDR decoding, message definitions from
 the bag or rosbag-inspect's built-in table. This package only maps decoded messages to the
 recording's files.
 
