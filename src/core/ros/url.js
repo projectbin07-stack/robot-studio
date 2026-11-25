@@ -10,12 +10,40 @@ const MAX_LENGTH = 512;
  * @typedef {{ ok: true, url: string, host: string, warnings: string[] } | { ok: false, reason: string }} UrlCheck
  */
 
+/** The one-command local launch (docs/ros2.md): serves this page from 127.0.0.1. */
+export const LOCAL_LAUNCH = "npx github:projectbin07-stack/robot-studio studio";
+
 /** @param {string} host */
 export const isLoopback = (host) =>
   host === "localhost" ||
   host.endsWith(".localhost") ||
   /^127(?:\.\d{1,3}){3}$/.test(host) ||
   host === "[::1]";
+
+/**
+ * A host a browser recognises as on the local network before resolving it:
+ * a private or link-local IPv4 / IPv6 literal, or a .local (mDNS) name.
+ * Chromium's Local Network Access exempts ws:// to these (and loopback) from
+ * mixed-content blocking and asks the user instead; a DNS name that resolves
+ * to a LAN address is not exempt.
+ * @param {string} host URL hostname (IPv6 in brackets)
+ */
+export function isLocalNetworkHost(host) {
+  const h = host.toLowerCase();
+  if (h.endsWith(".local")) return true;
+  const m = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254)
+    );
+  }
+  return /^\[(f[cd][0-9a-f]{0,2}|fe[89ab][0-9a-f]?):/.test(h);
+}
 
 /**
  * @param {string} input
@@ -47,13 +75,21 @@ export function checkRosbridgeUrl(input, pageProtocol = "") {
   if (!hasScheme && !u.port) u.port = String(DEFAULT_PORT);
   /** @type {string[]} */
   const warnings = [];
-  if (pageProtocol === "https:" && isLoopback(u.hostname))
+  // What browsers do with a public https page opening ws:// (docs/ros2.md,
+  // "Reaching a robot from the live site"): Chrome and Edge ask for local
+  // network access for loopback, private-address and .local targets (tested
+  // with Chrome 157 and Edge 158); other names are mixed content.
+  if (
+    pageProtocol === "https:" &&
+    u.protocol === "ws:" &&
+    (isLoopback(u.hostname) || isLocalNetworkHost(u.hostname))
+  )
     warnings.push(
-      "a public https page reaching this computer is blocked by Chromium-based browsers unless you allow local network access when asked (headless Edge blocked it: ERR_BLOCKED_BY_LOCAL_NETWORK_ACCESS_CHECKS); if the connection fails, open the studio from a local server (node scripts/serve.js, docs/ros2.md)",
+      `the browser will ask to allow access to devices on your local network: allow it (Chrome and Edge 147 or later; Firefox allows only this computer, Safari none). If it is blocked, start the studio on your computer with ${LOCAL_LAUNCH} and connect from there (docs/ros2.md)`,
     );
-  if (pageProtocol === "https:" && u.protocol === "ws:" && !isLoopback(u.hostname))
+  else if (pageProtocol === "https:" && u.protocol === "ws:")
     warnings.push(
-      "this page is served over https, so the browser blocks unencrypted ws:// connections to other machines (mixed content); open the studio from a local server (npm run serve) or use wss:// (docs/ros2.md)",
+      `this page is served over https, so the browser blocks unencrypted ws:// to a host name (mixed content); use the robot's IP address, wss://, or start the studio on your computer with ${LOCAL_LAUNCH} (docs/ros2.md)`,
     );
   return { ok: true, url: u.toString(), host: u.host, warnings };
 }

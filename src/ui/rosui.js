@@ -212,6 +212,7 @@ export function initRos(host) {
       else if (st === "closed") setStatus(`Not connected (${detail}).${warn}`);
       updateDrive();
     });
+    if (check.warnings.length > 0) void reportLocalNetworkPermission(check.host);
     c.onLog((level, text) => {
       if (level === "error" || level === "warn" || level === "warning")
         $("ros-status").textContent += ` ${text}.`;
@@ -231,6 +232,26 @@ export function initRos(host) {
     makeGate();
     c.connect();
   });
+
+  /**
+   * If the browser already denied local network access for this site, say so:
+   * it will not ask again until the permission is reset in the site settings.
+   * The permission names are Chromium's ("loopback-network" for this computer,
+   * "local-network" for the LAN); other browsers reject them, which is fine.
+   * @param {string} target
+   */
+  async function reportLocalNetworkPermission(target) {
+    if (!navigator.permissions) return;
+    const name = /^(localhost|127\.|\[::1\])/.test(target) ? "loopback-network" : "local-network";
+    try {
+      const p = await navigator.permissions.query(/** @type {any} */ ({ name }));
+      if (p.state === "denied")
+        $("ros-status").textContent +=
+          " This browser has denied local network access for this site: allow it again in the site settings (the icon left of the address), or use the local launch (docs/ros2.md).";
+    } catch {
+      // permission name unknown to this browser
+    }
+  }
 
   function disconnect() {
     if (gate) gate.disarm("disconnected");

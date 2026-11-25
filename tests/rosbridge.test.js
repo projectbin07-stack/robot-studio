@@ -11,7 +11,7 @@ import { RosbridgeClient, validName } from "../src/core/ros/rosbridge.js";
 import { LiveSession } from "../src/core/ros/live.js";
 import { CmdVelGate, ZERO, disarmOnDisconnect } from "../src/core/ros/deadman.js";
 import { RosJsonError, parseRosJson } from "../src/core/ros/json.js";
-import { checkRosbridgeUrl, isLoopback } from "../src/core/ros/url.js";
+import { checkRosbridgeUrl, isLocalNetworkHost, isLoopback } from "../src/core/ros/url.js";
 import * as M from "../src/core/ros/msgs.js";
 import { generate } from "../src/core/builder/templates.js";
 import { modelFromDoc } from "../src/core/builder/editor.js";
@@ -56,10 +56,27 @@ test("rosbridge URL: ws/wss only, no credentials, port completed, mixed-content 
   assert.ok(a.ok && a.url === "ws://192.168.1.20:9090/");
   const b = checkRosbridgeUrl("wss://robot.local:9443/ros", "https:");
   assert.ok(b.ok && b.url === "wss://robot.local:9443/ros" && b.warnings.length === 0);
-  const c = checkRosbridgeUrl("ws://192.168.1.20:9090", "https:");
-  assert.ok(c.ok && /mixed content/.test(c.warnings[0]));
-  const d = checkRosbridgeUrl("ws://localhost:9090", "https:");
-  assert.ok(d.ok && /local network access/.test(d.warnings[0]));
+  // Private addresses, .local and loopback: the browser's local-network prompt.
+  for (const host of [
+    "192.168.1.20",
+    "10.0.0.7",
+    "172.20.1.1",
+    "robot.local",
+    "localhost",
+    "[fd00::1]",
+  ]) {
+    const c = checkRosbridgeUrl(`ws://${host}:9090`, "https:");
+    assert.ok(
+      c.ok && /local network/.test(c.warnings[0]) && /npx github:/.test(c.warnings[0]),
+      host,
+    );
+  }
+  // A DNS name, or a public address: mixed content.
+  for (const host of ["robot.example.com", "8.8.8.8", "172.32.0.1"]) {
+    const d = checkRosbridgeUrl(`ws://${host}:9090`, "https:");
+    assert.ok(d.ok && /mixed content/.test(d.warnings[0]), host);
+  }
+  assert.ok(isLocalNetworkHost("169.254.3.4") && !isLocalNetworkHost("192.169.0.1"));
   const e = checkRosbridgeUrl("ws://127.0.0.1:9090", "http:");
   assert.ok(e.ok && e.warnings.length === 0);
   for (const [bad, why] of /** @type {[string, RegExp][]} */ ([
