@@ -59,7 +59,7 @@ import { imuModelFromCalibration } from "./imu.js";
  * @property {LidarSettings} lidar
  * @property {ImuSettings} imu
  * @property {DriveSettings} drive
- * @property {{ scanMatching: boolean, particles: number, mclGlobal: boolean }} estimators
+ * @property {{ scanMatching: boolean, particles: number, mclGlobal: boolean, mclOmni: boolean, mclRecovery: boolean }} estimators
  * @property {DepthSettings} depth
  */
 
@@ -98,6 +98,8 @@ export function defaultSimSettings() {
       scanMatching: DEFAULT_ESTIMATORS.scanMatching,
       particles: DEFAULT_ESTIMATORS.particles,
       mclGlobal: DEFAULT_ESTIMATORS.mclGlobal,
+      mclOmni: DEFAULT_ESTIMATORS.mclOmni,
+      mclRecovery: DEFAULT_ESTIMATORS.mclRecovery,
     },
     depth: { enabled: true, width: 32, height: 24, hfovDeg: 70, maxRange: 5, rateHz: 2 },
   };

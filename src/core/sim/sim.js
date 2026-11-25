@@ -68,7 +68,7 @@ export const SUBSTEPS = 10;
  * sensor_msgs/LaserScan.
  * @typedef {object} LidarModel
  * @property {SimSensor} sensor
- * @property {LidarConfig} config beams, fov, maxRange, noise, dropout
+ * @property {LidarConfig} config beams, fov, minRange, maxRange, noise, dropout
  * @property {number} minRange
  * @property {number} rateHz
  * @property {number} every scan every this many control periods
@@ -118,7 +118,7 @@ export function lidarModel(sensor, s, world) {
   const inc = full ? fov / beams : fov / (beams - 1);
   return {
     sensor,
-    config: { beams, fov, maxRange, rangeNoise: noise, dropout: s.dropout },
+    config: { beams, fov, maxRange, minRange, rangeNoise: noise, dropout: s.dropout },
     minRange,
     rateHz: CONTROL_RATE / every,
     every,
@@ -301,6 +301,9 @@ export function createSim(robot, world, settings, opts = {}) {
     sim.est = createEstimators(world, lidar.segments, drive, mount, {
       ...DEFAULT_ESTIMATORS,
       ...settings.estimators,
+      // The omnidirectional model is for bases that move sideways; a
+      // differential base drives forward and turns, which rot1-trans-rot2 fits.
+      mclOmni: settings.estimators.mclOmni && robot.drive === "mecanum",
       seed: settings.seed,
       match: { ...DEFAULT_MATCH },
       clearance: robot.footprint.radius,
@@ -505,9 +508,8 @@ export function estimates(sim) {
 function takeScan(sim) {
   const l = /** @type {LidarModel} */ (sim.lidar);
   const pose = compose(sim.truth, l.mount);
+  // lidar-slam-lab 0.2.0 applies the minimum range (config.minRange).
   const scan = simulateScan(l.segments, pose, l.config, sim.lidarRng);
-  for (let i = 0; i < scan.ranges.length; i++)
-    if (scan.ranges[i] < l.minRange) scan.ranges[i] = NaN;
   sim.lastScan = scan;
   sim.lastScanPose = pose;
   if (sim.log) sim.log.scans.push({ t: sim.t, ranges: scan.ranges });

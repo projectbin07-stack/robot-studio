@@ -54,6 +54,9 @@ export function referenceRun(mapId, seed, opts) {
       scanMatching: opts.scanMatching,
       particles: opts.particles,
       mclGlobal: false,
+      // lidar-slam-lab's own MCL: rot1-trans-rot2 and augmented-MCL recovery.
+      mclOmni: false,
+      mclRecovery: true,
       resolution: 0.05,
       fieldSigma: 0.1,
       fieldOccupiedThreshold: 0.5,

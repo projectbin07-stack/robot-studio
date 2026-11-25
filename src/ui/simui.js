@@ -71,6 +71,8 @@ const FIELDS = /** @type {([string] | [string, string])[]} */ ([
   ["estimators.scanMatching", "scan matching"],
   ["estimators.particles", "MCL particles (0 = off)"],
   ["estimators.mclGlobal", "MCL starts with no idea where it is"],
+  ["estimators.mclOmni", "MCL omnidirectional motion model on mecanum bases"],
+  ["estimators.mclRecovery", "MCL recovery: random particles when the fit drops"],
   ["Depth camera"],
   ["depth.enabled", "point cloud (first link tagged depth camera)"],
   ["Run"],

@@ -3,19 +3,17 @@
 // with the occupancy grid built from that estimate, and Monte Carlo
 // localisation on the known floor plan.
 //
-// lidar-slam-lab assumes the LiDAR sits at the robot's origin and the robot
-// turns about that origin. Here the estimators track the robot's drive
-// frame (the wheel centroid, its centre of rotation), and the LiDAR sits
-// wherever the URDF puts it: each scan is re-expressed as seen from the
-// drive frame's origin (every return keeps its exact end point; only the
-// free-space rays of the map start at the robot's centre instead of at the
-// LiDAR). Tracking the LiDAR's own pose instead would make the
-// rot1-trans-rot2 odometry model ill-conditioned: a turn on the spot moves
-// an offset LiDAR a few millimetres sideways, which that model reads as two
-// large rotations and MCL spreads its particles accordingly. With the LiDAR
-// at the origin the scan is passed through unchanged and the call sequence
-// is exactly lidar-slam-lab's sim.js step(), which the tests check number
-// for number.
+// The estimators track the robot's drive frame (the wheel centroid, its
+// centre of rotation); the LiDAR sits wherever the URDF puts it. Since
+// lidar-slam-lab 0.2.0 a scan carries its sensor's pose in the tracked frame
+// (`origin`), and the grid, scan matching and MCL cast its beams from there,
+// so free-space rays start at the LiDAR. (Up to Robot Studio 0.4 the scans
+// were re-expressed from the drive frame's origin instead, because 0.1.0 had
+// no mount pose.) MCL samples its motion with lidar-slam-lab's "omni" model
+// by default: rot1-trans-rot2 reads a mecanum strafe or backward driving as
+// half or quarter turns (settings estimators.mclOmni). With the LiDAR at the
+// origin, the "odometry" model and recovery on, the call sequence is exactly
+// lidar-slam-lab's sim.js step(), which the tests check number for number.
 
 import { applyOdometryDelta } from "../../../vendor/lidar-slam-lab/src/motion.js";
 import {
@@ -55,6 +53,9 @@ import { normalizeAngle } from "../../../vendor/lidar-slam-lab/src/geometry.js";
  * @property {boolean} scanMatching
  * @property {number} particles MCL particle count, 0 = off
  * @property {boolean} mclGlobal start MCL spread over the whole map
+ * @property {boolean} [mclOmni] MCL motion model "omni" (default true) instead of rot1-trans-rot2
+ * @property {boolean} [mclRecovery] augmented MCL's random particles when the fit
+ *   drops (default false: off while tracking, as in ROS AMCL's defaults)
  * @property {number} resolution grid cell size, m
  * @property {number} fieldSigma likelihood-field fall-off for matching, m
  * @property {number} fieldOccupiedThreshold log-odds above which a cell is an obstacle for matching
@@ -67,6 +68,8 @@ export const DEFAULT_ESTIMATORS = Object.freeze({
   scanMatching: true,
   particles: 300,
   mclGlobal: false,
+  mclOmni: true,
+  mclRecovery: false,
   resolution: 0.05,
   fieldSigma: 0.1,
   fieldOccupiedThreshold: 0.5,
@@ -149,7 +152,10 @@ export function createEstimators(area, knownWalls, start, mount, settings) {
       settings.particles,
       known,
       createRng(settings.seed ^ 0x85ebca6b),
-      {},
+      {
+        motionModel: (settings.mclOmni ?? true) ? "omni" : "odometry",
+        ...((settings.mclRecovery ?? false) ? {} : { maxInjection: 0 }),
+      },
       space,
     );
     if (settings.mclGlobal) initializeUniform(pf);
@@ -163,38 +169,16 @@ export function createEstimators(area, knownWalls, start, mount, settings) {
 }
 
 /**
- * A scan as seen from the tracked frame's origin: each return's end point
- * is kept exactly; angles and ranges are measured from the origin. A scan
- * from a LiDAR at the origin is returned unchanged.
+ * The scan with its sensor's pose in the tracked frame as its origin (angles
+ * stay in the sensor frame). A scan from a LiDAR at the origin is returned
+ * unchanged, so lidar-slam-lab computes exactly what its own loop does.
  * @param {Scan} scan
  * @param {Pose2} mount
  * @returns {Scan}
  */
-export function virtualScan(scan, mount) {
+export function mountedScan(scan, mount) {
   if (mount.x === 0 && mount.y === 0 && mount.theta === 0) return scan;
-  const n = scan.ranges.length;
-  const angles = new Float64Array(n);
-  const ranges = new Float64Array(n);
-  const c = Math.cos(mount.theta);
-  const s = Math.sin(mount.theta);
-  let maxRange = 0;
-  for (let i = 0; i < n; i++) {
-    const r = scan.ranges[i];
-    const a = mount.theta + scan.angles[i];
-    if (Number.isNaN(r)) {
-      angles[i] = a;
-      ranges[i] = NaN;
-      continue;
-    }
-    const lx = r * Math.cos(scan.angles[i]);
-    const ly = r * Math.sin(scan.angles[i]);
-    const x = mount.x + c * lx - s * ly;
-    const y = mount.y + s * lx + c * ly;
-    angles[i] = Math.atan2(y, x);
-    ranges[i] = Math.hypot(x, y);
-    maxRange = Math.max(maxRange, ranges[i]);
-  }
-  return { angles, ranges, maxRange: Math.max(scan.maxRange, maxRange) };
+  return { ...scan, origin: { x: mount.x, y: mount.y, theta: mount.theta } };
 }
 
 /**
@@ -203,7 +187,7 @@ export function virtualScan(scan, mount) {
  * @param {Scan} scan as the LiDAR took it
  */
 export function firstScan(e, scan) {
-  integrateScan(e.grid, e.est, virtualScan(scan, e.mount));
+  integrateScan(e.grid, e.est, mountedScan(scan, e.mount));
   e.scansIntegrated++;
   e.field = null;
 }
@@ -218,14 +202,15 @@ export function firstScan(e, scan) {
  */
 export function updateEstimators(e, measured, raw, truth) {
   const s = e.settings;
-  const scan = virtualScan(raw, e.mount);
+  const scan = mountedScan(raw, e.mount);
   e.odom = applyOdometryDelta(e.odom, measured);
   const guess = applyOdometryDelta(e.est, measured);
   if (e.pf !== null) {
     predict(e.pf, measured);
     updateWeights(e.pf, scan);
-    resampleIfNeeded(e.pf);
+    // Before resampling, as lidar-slam-lab 0.2.1's sim.js does.
     const est = estimate(e.pf);
+    resampleIfNeeded(e.pf);
     e.mcl = est.pose;
     e.mclSpread = est.spread;
   }

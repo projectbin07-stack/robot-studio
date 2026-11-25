@@ -26,7 +26,7 @@ import {
   imuModelFromGazebo,
   invert3,
 } from "../src/core/sim/imu.js";
-import { createEstimators, virtualScan } from "../src/core/sim/estimators.js";
+import { createEstimators, mountedScan } from "../src/core/sim/estimators.js";
 import { referenceRun } from "../src/core/sim/reference.js";
 import { depthCloud } from "../src/core/sim/depth.js";
 import { createRng } from "../vendor/lidar-slam-lab/src/rng.js";
@@ -477,24 +477,19 @@ test("the estimator wrapper reproduces lidar-slam-lab's own loop number for numb
   assert.ok(Number.isNaN(noSm.estRms) && Number.isNaN(noSm.mclRms));
 });
 
-test("a scan seen from the drive frame keeps every end point", () => {
+test("a scan from an offset LiDAR carries its mount as the origin; MCL options follow the settings", () => {
   const scan = {
     angles: new Float64Array([0, 1, 2]),
     ranges: new Float64Array([1, NaN, 2]),
     maxRange: 8,
   };
-  assert.equal(virtualScan(scan, { x: 0, y: 0, theta: 0 }), scan);
+  assert.equal(mountedScan(scan, { x: 0, y: 0, theta: 0 }), scan);
   const mount = { x: 0.1, y: -0.05, theta: 0.3 };
-  const v = virtualScan(scan, mount);
-  for (const i of [0, 2]) {
-    const a = mount.theta + scan.angles[i];
-    const x = mount.x + scan.ranges[i] * Math.cos(a);
-    const y = mount.y + scan.ranges[i] * Math.sin(a);
-    assert.ok(Math.abs(v.ranges[i] * Math.cos(v.angles[i]) - x) < 1e-12);
-    assert.ok(Math.abs(v.ranges[i] * Math.sin(v.angles[i]) - y) < 1e-12);
-  }
-  assert.ok(Number.isNaN(v.ranges[1]));
-  const e = createEstimators({ width: 5, height: 5 }, [], { x: 1, y: 1, theta: 0 }, mount, {
+  const v = mountedScan(scan, mount);
+  assert.deepEqual(v.origin, mount);
+  assert.equal(v.ranges, scan.ranges);
+  assert.equal(/** @type {any} */ (scan).origin, undefined);
+  const base = {
     seed: 1,
     scanMatching: true,
     particles: 10,
@@ -504,8 +499,20 @@ test("a scan seen from the drive frame keeps every end point", () => {
     fieldOccupiedThreshold: 0.5,
     match: /** @type {any} */ ({}),
     clearance: 0.1,
-  });
+  };
+  const area = { width: 5, height: 5 };
+  const e = createEstimators(area, [], { x: 1, y: 1, theta: 0 }, mount, base);
   assert.ok(e.mcl && e.pf?.count === 10);
+  // Defaults: omnidirectional motion model, no random-particle recovery.
+  assert.equal(e.pf?.options.motionModel, "omni");
+  assert.equal(e.pf?.options.maxInjection, 0);
+  const lsl = createEstimators(area, [], { x: 1, y: 1, theta: 0 }, mount, {
+    ...base,
+    mclOmni: false,
+    mclRecovery: true,
+  });
+  assert.equal(lsl.pf?.options.motionModel, "odometry");
+  assert.equal(lsl.pf?.options.maxInjection, 0.1);
 });
 
 test("the full simulation's estimators beat wheel odometry on the lab route", () => {

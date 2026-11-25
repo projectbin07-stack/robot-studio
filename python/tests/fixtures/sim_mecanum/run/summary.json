@@ -171,20 +171,20 @@
         "max": 0.0381
       },
       "scan_matching": {
-        "final": 0.063,
-        "rms": 0.0521,
-        "max": 0.0657
+        "final": 0.0468,
+        "rms": 0.0407,
+        "max": 0.0569
       },
       "mcl": {
-        "final": 0.0329,
-        "rms": 0.0375,
-        "max": 0.0411
+        "final": 0.0371,
+        "rms": 0.0397,
+        "max": 0.0454
       }
     },
     "scan_match_accept_rate": 1,
     "map_precision": {
-      "occupied_cells": 640,
-      "within_0_1_m": 0.975
+      "occupied_cells": 613,
+      "within_0_1_m": 1
     }
   },
   "notes": []
