@@ -26,6 +26,7 @@ const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 /**
  * @typedef {object} FakeOptions
  * @property {number} [port] 0 = any free port
+ * @property {string} [host] address to listen on (default 127.0.0.1)
  * @property {{ dt: number, topic: string, line: string }[]} [fixture] replayed in a loop
  * @property {string} [description] robot_description for /robot_description and rosapi/get_param
  * @property {number} [speed] replay speed factor (default 1)
@@ -198,7 +199,7 @@ export class FakeServer {
   /** @returns {Promise<number>} the port */
   listen() {
     return new Promise((resolve) => {
-      this.http.listen(this.opts.port ?? 0, "127.0.0.1", () => {
+      this.http.listen(this.opts.port ?? 0, this.opts.host ?? "127.0.0.1", () => {
         const addr = this.http.address();
         resolve(typeof addr === "object" && addr ? addr.port : 0);
       });
@@ -357,6 +358,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { values } = parseArgs({
     options: {
       port: { type: "string", default: "9090" },
+      // 127.0.0.1 by default; a LAN address only to test a browser reaching a
+      // private address (the data is simulated fixture data either way).
+      host: { type: "string", default: "127.0.0.1" },
       fixture: { type: "string" },
       description: { type: "string" },
       log: { type: "string" },
@@ -365,6 +369,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const logPath = values.log;
   const server = new FakeServer({
     port: Number(values.port),
+    host: values.host,
     fixture: values.fixture ? loadFixture(values.fixture) : [],
     description: values.description ? readFileSync(values.description, "utf8") : undefined,
     onClientMessage: (e) => {
@@ -377,7 +382,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     },
   });
   const port = await server.listen();
-  console.log(`fake rosbridge (simulated fixture data) on ws://127.0.0.1:${port}`);
+  console.log(`fake rosbridge (simulated fixture data) on ws://${values.host}:${port}`);
   const stop = async () => {
     await server.close();
     process.exit(0);

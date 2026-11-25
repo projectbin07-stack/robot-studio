@@ -27,8 +27,23 @@
 //                           (--ros-keep-armed: leave driving armed, for a screenshot)
 //     [--allow-local-network] turn off Chromium's Local Network Access check (a public
 //                           https page connecting to a rosbridge server on localhost)
+//     [--grant-local-network] grant the page's origin the Local Network Access permission
+//                           through DevTools (what clicking "Allow" in the browser's prompt
+//                           does), instead of turning the check off
 //     [--replay FILE]       open a recording .zip in the ROS 2 panel, replay it, compare it
 //                           with the simulator
+//     [--axe]               run axe-core (vendored) on the page at the end, WCAG 2.1 A and AA
+//                           rules; --axe-report FILE writes the violations as JSON;
+//                           --axe-max N fails when more than N rules are violated (default 0)
+//     [--theme light|dark]  force the colour scheme (prefers-color-scheme) before loading
+//     [--tour]              first visit: the "Start here" panel is shown; run the guided
+//                           example's four steps with the keyboard and check what each did
+//                           (--shots PREFIX saves PREFIX-welcome.png and PREFIX-tour-N.png)
+//     [--close-welcome]     close the "Start here" panel first (for screenshots of a panel)
+//     [--keyboard]          operate the page with the keyboard only (real key events): tree
+//                           (arrows, Enter), a joint slider (arrows), the view toolbar
+//                           (Enter), the Simulate and ROS 2 panels (Enter, typing); checks
+//                           that each focused control shows a focus outline
 //
 // Exit code 0 when the page reached "ready", showed the expected number of
 // links, drew something with WebGL and logged no console errors.
@@ -68,7 +83,17 @@ const { values } = parseArgs({
     "ros-log": { type: "string" },
     "ros-keep-armed": { type: "boolean", default: false },
     "allow-local-network": { type: "boolean", default: false },
+    "grant-local-network": { type: "boolean", default: false },
     replay: { type: "string" },
+    axe: { type: "boolean", default: false },
+    keyboard: { type: "boolean", default: false },
+    tour: { type: "boolean", default: false },
+    shots: { type: "string" },
+    "close-welcome": { type: "boolean", default: false },
+    "axe-report": { type: "string" },
+    "axe-max": { type: "string", default: "0" },
+    "max-open-ms": { type: "string" },
+    theme: { type: "string" },
     timeout: { type: "string", default: "60000" },
   },
 });
@@ -196,6 +221,28 @@ try {
     deviceScaleFactor: values.mobile ? 2 : 1,
     mobile: values.mobile,
   });
+  /** @type {string | null} */
+  let granted = null;
+  if (values["grant-local-network"]) {
+    const origin = new URL(values.url).origin;
+    // Chromium's permission names changed: "localNetworkAccess" until 144,
+    // then "localNetwork" (private addresses) and "loopbackNetwork" (127.0.0.1).
+    for (const names of [["loopbackNetwork", "localNetwork"], ["localNetworkAccess"]]) {
+      try {
+        await send("Browser.grantPermissions", { origin, permissions: names });
+        granted = names.join("+");
+        break;
+      } catch {
+        // try the older name
+      }
+    }
+    if (granted === null)
+      throw new Error("this browser has no Local Network Access permission to grant");
+  }
+  if (values.theme === "light" || values.theme === "dark")
+    await s("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: values.theme }],
+    });
   await s("Page.navigate", { url: values.url });
 
   /** @param {string} expr */
@@ -212,6 +259,8 @@ try {
     return r.result.value;
   };
   const deadline = Date.now() + Number(values.timeout);
+  /** @type {number | null} */
+  let openMs = null;
   let st = "";
   if (values.upload) {
     // Wait for the default example, then open the given file through the file input.
@@ -220,12 +269,21 @@ try {
     await evaluate("document.body && (document.body.dataset.state = 'uploading')");
     const { root } = await s("DOM.getDocument");
     const { nodeId } = await s("DOM.querySelector", { nodeId: root.nodeId, selector: "#file" });
+    // Open time: from handing the file to the page until the model and all its
+    // meshes are shown (the page records performance.now() at "ready").
+    const t0 = await evaluate("performance.now()");
     await s("DOM.setFileInputFiles", { nodeId, files: [resolve(values.upload)] });
     while (
       Date.now() < deadline &&
       (await evaluate("document.body?.dataset.state")) === "uploading"
     )
-      await sleep(100);
+      await sleep(50);
+    while (
+      Date.now() < deadline &&
+      !["ready", "error"].includes(await evaluate("document.body?.dataset.state"))
+    )
+      await sleep(50);
+    openMs = Math.round(Number(await evaluate("document.body.dataset.readyAt")) - t0);
   }
   while (Date.now() < deadline) {
     st = await evaluate("document.body ? document.body.dataset.state : ''");
@@ -278,6 +336,16 @@ try {
   const ros = {};
   if (values.ros && st === "ready") await runRos(s, evaluate, ros, simProblems, deadline);
   if (values.replay && st === "ready") await runReplay(s, evaluate, ros, simProblems, deadline);
+  /** @type {Record<string, unknown>} */
+  const tour = {};
+  if (values.tour && st === "ready") await runTour(s, evaluate, tour, simProblems, deadline);
+  if (values["close-welcome"])
+    await evaluate(
+      "(() => { const b = document.getElementById('welcome-close'); if (b && !document.getElementById('welcome').hidden) b.click(); })()",
+    );
+  /** @type {Record<string, unknown>} */
+  const kb = {};
+  if (values.keyboard && st === "ready") await runKeyboard(s, evaluate, kb, simProblems, deadline);
   if (values["select-link"]) {
     await clickSelector(s, evaluate, `#tree .t-link[data-link="${values["select-link"]}"]`);
     await sleep(300);
@@ -307,10 +375,15 @@ try {
       webglColours: distinct,
     };
   })()`);
+  if (values.axe) report.axe = await runAxe(evaluate);
+  if (openMs !== null) report.openMs = openMs;
+  if (granted !== null) report.grantedPermissions = granted;
   report.consoleErrors = errors;
   if (values.builder) report.builder = builder;
   if (values.sim) report.sim = sim;
   if (values.ros || values.replay) report.ros = ros;
+  if (values.keyboard) report.keyboard = kb;
+  if (values.tour) report.tour = tour;
   if (values.screenshot) {
     // On a phone the 3D view is at the top of the page; scenarios may have scrolled away from it.
     if (values.mobile) await evaluate("window.scrollTo(0, 0)");
@@ -330,6 +403,15 @@ try {
   if (report.webglColours < 12)
     problems.push(`the 3D view looks blank (${report.webglColours} colours)`);
   if (errors.length > 0) problems.push(`${errors.length} console error(s)`);
+  if (values["max-open-ms"] && !(openMs !== null && openMs <= Number(values["max-open-ms"])))
+    problems.push(`open took ${openMs} ms, budget ${values["max-open-ms"]} ms`);
+  if (values.axe) {
+    const a = /** @type {{ violations: { id: string, nodes: number }[] }} */ (report.axe);
+    if (a.violations.length > Number(values["axe-max"]))
+      problems.push(
+        `axe: ${a.violations.length} rule(s) violated (${a.violations.map((v) => `${v.id} x${v.nodes}`).join(", ")})`,
+      );
+  }
   problems.push(...builderProblems, ...simProblems);
   for (const p of problems) console.error(`FAIL: ${p}`);
   exitCode = problems.length === 0 ? 0 : 1;
@@ -361,6 +443,254 @@ try {
     // the browser may still hold files on Windows; the folder is in TMP
   }
   process.exit(exitCode);
+}
+
+/**
+ * Keyboard only: real key events through DevTools, focus checked after each.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {number} deadline
+ */
+async function runKeyboard(s, evaluate, out, problems, deadline) {
+  /** @type {Record<string, [string, number]>} key -> [code, key code] */
+  const KEYS = {
+    ArrowDown: ["ArrowDown", 40],
+    ArrowUp: ["ArrowUp", 38],
+    ArrowRight: ["ArrowRight", 39],
+    ArrowLeft: ["ArrowLeft", 37],
+    Enter: ["Enter", 13],
+    " ": ["Space", 32],
+    Tab: ["Tab", 9],
+    Home: ["Home", 36],
+  };
+  const key = async (/** @type {string} */ k) => {
+    const [code, kc] = KEYS[k];
+    await pressKey(s, k, code, kc, 0);
+    await sleep(60);
+  };
+  /** What has the focus, and does it show an outline? */
+  const focus = () =>
+    evaluate(`(() => {
+      const e = document.activeElement;
+      if (!e || e === document.body) return { what: "body", outline: false };
+      const cs = getComputedStyle(e);
+      const what = e.id ? "#" + e.id : e.tagName.toLowerCase() + (e.dataset.link ? "[" + e.dataset.link + "]" : e.dataset.joint ? "[" + e.dataset.joint + "]" : e.dataset.geometry ? "[" + e.dataset.geometry + "]" : "");
+      let shown = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 1;
+      // a visually hidden file input shows its focus on the label after it
+      if (!shown && e.classList.contains("file-sr") && e.nextElementSibling)
+        shown = getComputedStyle(e.nextElementSibling).outlineStyle !== "none";
+      return { what, outline: shown };
+    })()`);
+  /** @param {string} label */
+  const expectOutline = async (label) => {
+    const f = await focus();
+    if (!f.outline) problems.push(`keyboard: ${label}: ${f.what} has no visible focus outline`);
+    return f;
+  };
+  // 1. The tree: one Tab stop, arrows move, Enter selects.
+  await evaluate("document.activeElement && document.activeElement.blur()");
+  await evaluate(`document.querySelector('#tree [role=treeitem][tabindex="0"]').focus()`);
+  out.treeStops = await evaluate(`document.querySelectorAll('#tree [tabindex="0"]').length`);
+  if (out.treeStops !== 1) problems.push(`keyboard: the tree has ${out.treeStops} Tab stops`);
+  await key("ArrowDown");
+  await key("ArrowDown");
+  out.treeFocus = (await expectOutline("tree")).what;
+  await key("Enter");
+  await sleep(200);
+  out.treeSelected = await evaluate(
+    `(() => { const b = document.querySelector('#tree [aria-selected="true"]'); return b ? b.textContent : null; })()`,
+  );
+  if (!out.treeSelected) problems.push("keyboard: Enter in the tree selected nothing");
+  out.details = await evaluate("document.getElementById('details-title').textContent");
+  await key("ArrowLeft");
+  out.treeParent = (await focus()).what;
+  // 2. A joint slider.
+  const hasSlider = await evaluate(
+    "!!document.querySelector('#joints input[type=range]:not(:disabled)')",
+  );
+  if (hasSlider) {
+    await evaluate("document.querySelector('#joints input[type=range]:not(:disabled)').focus()");
+    const before = await evaluate(
+      "document.querySelector('#joints input[type=range]:not(:disabled)').value",
+    );
+    // A slider already at its upper limit moves with ArrowLeft instead.
+    const atMax = await evaluate(
+      "(() => { const e = document.querySelector('#joints input[type=range]:not(:disabled)'); return Number(e.value) >= Number(e.max); })()",
+    );
+    for (let i = 0; i < 5; i++) await key(atMax ? "ArrowLeft" : "ArrowRight");
+    await expectOutline("slider");
+    const after = await evaluate(
+      "document.querySelector('#joints input[type=range]:not(:disabled)').value",
+    );
+    out.slider = { before: Number(before), after: Number(after) };
+    if (Number(after) === Number(before))
+      problems.push("keyboard: the arrow keys did not move a joint slider");
+  }
+  // 3. The view toolbar.
+  await evaluate("document.querySelector('[data-geometry=collision]').focus()");
+  await key("Enter");
+  await expectOutline("view toolbar");
+  out.collisionPressed = await evaluate(
+    "document.querySelector('[data-geometry=collision]').getAttribute('aria-pressed')",
+  );
+  if (out.collisionPressed !== "true")
+    problems.push("keyboard: Enter on Collision did not switch the view");
+  await evaluate("document.querySelector('[data-geometry=visual]').focus()");
+  await key(" ");
+  // 4. Tab from the toolbar reaches the next control (no keyboard trap).
+  await key("Tab");
+  out.afterToolbarTab = (await focus()).what;
+  // 5. The Simulate panel: open it and start the simulation with Enter.
+  await evaluate("document.querySelector('#p-sim > summary').focus()");
+  await key("Enter");
+  await expectOutline("Simulate summary");
+  await key("Tab");
+  out.simTab = (await expectOutline("Simulate panel")).what;
+  if (out.simTab !== "#sim-open")
+    problems.push(`keyboard: Tab after the Simulate summary reached ${out.simTab}`);
+  await key("Enter");
+  while (Date.now() < deadline && (await evaluate("document.body.dataset.sim")) !== "running")
+    await sleep(200);
+  out.sim = await evaluate("document.body.dataset.sim");
+  if (out.sim !== "running")
+    problems.push("keyboard: Enter on 'Simulate this robot' did not start it");
+  await evaluate("document.getElementById('sim-close').focus()");
+  await key("Enter");
+  await sleep(500);
+  out.afterSimClose = await evaluate(`(() => {
+    const c = document.querySelector('#view canvas');
+    const t = document.createElement('canvas'); t.width = 64; t.height = 64;
+    const g = t.getContext('2d'); g.drawImage(c, 0, 0, 64, 64);
+    const d = g.getImageData(0, 0, 64, 64).data; const seen = new Set();
+    for (let i = 0; i < d.length; i += 4) seen.add((d[i] >> 3) + ',' + (d[i+1] >> 3) + ',' + (d[i+2] >> 3));
+    return seen.size;
+  })()`);
+  // Closing the simulation brings the camera back to the model (it was left in the world).
+  if (!(Number(out.afterSimClose) >= 12))
+    problems.push(
+      `keyboard: the 3D view is empty after closing the simulation (${out.afterSimClose} colours)`,
+    );
+  // 6. The ROS 2 panel: open it, type an address, reach Connect.
+  await evaluate("document.querySelector('#p-ros > summary').focus()");
+  await key("Enter");
+  await key("Tab");
+  const rosFocus = await expectOutline("ROS 2 panel");
+  if (rosFocus.what !== "#ros-url")
+    problems.push(`keyboard: Tab in the ROS 2 panel reached ${rosFocus.what}`);
+  await s("Input.insertText", { text: "ws://127.0.0.1:1" });
+  await key("Tab");
+  out.rosTab = (await expectOutline("ROS 2 connect")).what;
+  if (out.rosTab !== "#ros-connect")
+    problems.push(`keyboard: Tab after the address reached ${out.rosTab}`);
+  await evaluate("document.querySelector('#p-ros').open = false");
+}
+
+/**
+ * Save a screenshot of the page as it is now.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {string} file
+ */
+async function shot(s, file) {
+  await sleep(600);
+  const r = await s("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  writeFileSync(file, Buffer.from(r.data, "base64"));
+}
+
+/**
+ * The first-run panel and the guided example, with the keyboard.
+ * @param {(m: string, p?: object) => Promise<any>} s
+ * @param {(expr: string) => Promise<any>} evaluate
+ * @param {Record<string, unknown>} out
+ * @param {string[]} problems
+ * @param {number} deadline
+ */
+async function runTour(s, evaluate, out, problems, deadline) {
+  const enter = () => pressKey(s, "Enter", "Enter", 13, 0);
+  out.welcome = await evaluate("document.body.dataset.welcome");
+  if (out.welcome !== "open") {
+    problems.push(`tour: the Start here panel is '${out.welcome}' on a first visit`);
+    return;
+  }
+  out.cards = await evaluate(
+    "[...document.querySelectorAll('#welcome .wcard h3')].map((h) => h.textContent)",
+  );
+  if (values.shots) await shot(s, `${values.shots}-welcome.png`);
+  await evaluate("document.getElementById('welcome-start').focus()");
+  await enter();
+  /** @type {Record<string, unknown>[]} */
+  const steps = [];
+  for (let k = 1; k <= 4; k++) {
+    while (
+      Date.now() < deadline &&
+      ((await evaluate("document.body.dataset.tourStep")) !== String(k) ||
+        (await evaluate("document.getElementById('tour-status').textContent")) !== "")
+    )
+      await sleep(150);
+    await sleep(k === 3 ? 4000 : 500); // let the simulation drive a little before the picture
+    const d = await evaluate(`({
+      title: document.getElementById('tour-title').textContent,
+      editing: document.body.classList.contains('editing'),
+      sim: document.body.dataset.sim ?? null,
+      rosOpen: document.getElementById('p-ros').open,
+      focus: document.activeElement && (document.activeElement.id || document.activeElement.getAttribute('role')),
+      links: document.body.dataset.links,
+    })`);
+    steps.push(d);
+    if (values.shots) await shot(s, `${values.shots}-tour-${k}.png`);
+    if (k < 4) {
+      await evaluate("document.getElementById('tour-next').focus()");
+      await enter();
+    }
+  }
+  out.steps = steps;
+  const [a, b, c, d] = /** @type {any[]} */ (steps);
+  if (!a || a.links !== "11") problems.push(`tour step 1: example not open (${a?.links} links)`);
+  if (!b || !b.editing || b.links !== "10")
+    problems.push("tour step 2: no robot from the template");
+  if (!c || c.sim !== "running") problems.push(`tour step 3: simulation '${c?.sim}'`);
+  if (!d || !d.rosOpen || d.sim === "running")
+    problems.push("tour step 4: the ROS 2 panel is not open or the simulation still runs");
+  await evaluate("document.getElementById('tour-next').focus()");
+  await enter();
+  await sleep(200);
+  out.afterFinish = await evaluate("document.body.dataset.welcome");
+  if (out.afterFinish !== "closed") problems.push("tour: Finish did not close the panel");
+}
+
+/**
+ * Inject the vendored axe-core and run the WCAG 2.1 A/AA rules on the page.
+ * @param {(expr: string) => Promise<any>} evaluate
+ */
+async function runAxe(evaluate) {
+  const src = readFileSync(new URL("../vendor/axe-core/axe.min.js", import.meta.url), "utf8");
+  await evaluate(`${src};\nundefined`);
+  const r = await evaluate(`axe.run(document, {
+    runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
+    resultTypes: ["violations"],
+  }).then((r) => ({
+    version: axe.version,
+    passes: r.passes.length,
+    incomplete: r.incomplete.length,
+    violations: r.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      help: v.help,
+      nodes: v.nodes.length,
+      targets: v.nodes.slice(0, 8).map((n) => n.target.join(" ") + (n.failureSummary ? " :: " + n.failureSummary.split(String.fromCharCode(10)).slice(1, 2).join(" ").trim() : "")),
+    })),
+  }))`);
+  if (values["axe-report"]) writeFileSync(values["axe-report"], JSON.stringify(r, null, 2));
+  return {
+    version: r.version,
+    violations: r.violations.map((/** @type {any} */ v) => ({
+      id: v.id,
+      impact: v.impact,
+      nodes: v.nodes,
+    })),
+    nodes: r.violations.reduce((/** @type {number} */ a, /** @type {any} */ v) => a + v.nodes, 0),
+  };
 }
 
 /**
