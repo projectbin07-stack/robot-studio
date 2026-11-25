@@ -5,8 +5,8 @@
       "name": "urdf-inspector",
       "kind": "git",
       "repo": "https://github.com/projectbin07-stack/urdf-inspector.git",
-      "tag": "v0.1.1",
-      "commit": "fee0315881710106720bb61984e29eab951a71ef",
+      "tag": "v0.2.0",
+      "commit": "b1110ee0c82399acc90a613e59db3c39f51158bf",
       "license": "MIT",
       "dest": "vendor/urdf-inspector",
       "files": [
@@ -16,7 +16,7 @@
         },
         {
           "path": "src/core/xml.js",
-          "sha256": "d4124e8b226bc30177cde108349578fe3ef631ffecc9abd992c4ff093388f932"
+          "sha256": "264a7ee59fd1cee898630aded397c8f75afc7d5c861539e7dc5338528de12d7f"
         },
         {
           "path": "src/core/urdf.js",
@@ -24,11 +24,11 @@
         },
         {
           "path": "src/core/findings.js",
-          "sha256": "9afdf7158ba28eb6c00797cef04082b76306544fcf5bde5331f72495a1e3845d"
+          "sha256": "e4cc510de531c6e0871f30ace416a728e060e1eb0720cfb5a15d15259841ce46"
         },
         {
           "path": "src/core/fk.js",
-          "sha256": "7c14d9cd8b29c5de62d91fcf4698912dac1fbd641899eaeaec05bcfac6cebbec"
+          "sha256": "929f0052824150adef815d649b4b881edc2d5c77530c335254151f31ca326012"
         },
         {
           "path": "src/core/inertia.js",
@@ -48,15 +48,15 @@
         },
         {
           "path": "src/core/inspect.js",
-          "sha256": "8d324eab8eb6425c77ee297f295edf3c81e31090f7abb3e558bb2b1e63275a2b"
+          "sha256": "3e5958578b3c83c48b80ff66021f96f1bf6217217f301cc626cc740b6867dedb"
         },
         {
           "path": "src/core/report.js",
-          "sha256": "3d161dcfcf4e17a6e8364905e7fd2919c0e1879e9d79320f2a296aebae69ae61"
+          "sha256": "9f9eb185db707de4c03e7c9b02e32c8eeff306ef9967de099bddaa06ec659991"
         },
         {
           "path": "src/core/version.js",
-          "sha256": "6e5e3197bcd22e6e6674f825578d7bad32a71a4d28bd9bc93f407a88fc8240cc"
+          "sha256": "a606660ab031ac9f6c4abe14d8dfd0c72dd5268cf8e582c2c231db14f248047a"
         },
         {
           "path": "src/core/checks/context.js",
@@ -92,8 +92,8 @@
       "name": "lidar-slam-lab",
       "kind": "git",
       "repo": "https://github.com/projectbin07-stack/lidar-slam-lab.git",
-      "tag": "v0.1.0",
-      "commit": "e58ac1980f03006fc49153a6096886aba694e194",
+      "tag": "v0.2.1",
+      "commit": "e08c2ed8d001d4b2fbd27d85d0fb8d0be010a38c",
       "license": "MIT",
       "dest": "vendor/lidar-slam-lab",
       "files": [
@@ -107,7 +107,7 @@
         },
         {
           "path": "src/geometry.js",
-          "sha256": "14780b9fd23f2200f884b9b86155dbf331722832d808702e328b4b0c8bc512a3"
+          "sha256": "7346d84ca96c3fa74d72a74f6d63a88ca796b90969c7d374e6c402c196f55654"
         },
         {
           "path": "src/world.js",
@@ -119,15 +119,15 @@
         },
         {
           "path": "src/lidar.js",
-          "sha256": "cf4cc079775290d618d0b1b35c0b6011e96875ed91dba994ee0de32318168e08"
+          "sha256": "beb8a0a0190e3174a5ef6512f9ff10df725b185751ce3075beabecb23fa53ddf"
         },
         {
           "path": "src/motion.js",
-          "sha256": "b4b3c59c428608286480293d8a699e4670e593479c9ab2cb0913fe3aa55ebf54"
+          "sha256": "ae761913b74858dd023ceb5d193e5f0fd5e9cbf6ecd9436c01cacbb95cd7df67"
         },
         {
           "path": "src/grid.js",
-          "sha256": "7f8be956dc336370620706bc76f6ea2f253fe91852791e2b6feb4bdc3f9d2e4d"
+          "sha256": "57b0eb735aec3b4757e90c444be6153b1474e3dbc3f7b73ed002ebdbaea725ff"
         },
         {
           "path": "src/distance.js",
@@ -135,11 +135,11 @@
         },
         {
           "path": "src/scanmatch.js",
-          "sha256": "cc22794c836216be9df1fdf2cb7acad8ae3441800aea206852bb9cb054ec595a"
+          "sha256": "2a9394ed72c014419a84174610fe23066a64d7f472abfe9f524a49ce963647d8"
         },
         {
           "path": "src/mcl.js",
-          "sha256": "30657197307d47f3d03fa2536815e7817d9e01b4bfe4efe4e435baa82871a840"
+          "sha256": "b05b148c18f0832c4a7548008b05f3cbf9d310405c71adeb5839089bfe7f8f90"
         },
         {
           "path": "src/metrics.js",
@@ -155,7 +155,7 @@
         },
         {
           "path": "src/sim.js",
-          "sha256": "ea5059998f7290b88eda9f3a12e796a41985554c06f6462cff5fe0388a1dbeeb"
+          "sha256": "7e5b8b6e023cb30511728e9428764ef5b4862456d34dd2a133ccb185dd89cf1b"
         }
       ]
     },
@@ -207,6 +207,25 @@
         {
           "path": "examples/jsm/loaders/collada/ColladaComposer.js",
           "sha256": "eb262d262790a59d3e3b3c50abc56d565f6d97a34a3979151321da73ab9846a1"
+        }
+      ]
+    },
+    {
+      "name": "axe-core",
+      "kind": "npm",
+      "package": "axe-core",
+      "version": "4.14.0",
+      "integrity": "sha512-9WTZxEjsZ7b13TH8JPmbV2z8CHbl80/2hm3XPEG4JgNdQLK81IBRXmSxHfMAOkSqQeRxT/0dwNDz2GOm3zzpcQ==",
+      "license": "MPL-2.0",
+      "dest": "vendor/axe-core",
+      "files": [
+        {
+          "path": "LICENSE",
+          "sha256": "af175b9d96ee93c21a036152e1b905b0b95304d4ae8c2c921c7609100ba8df7e"
+        },
+        {
+          "path": "axe.min.js",
+          "sha256": "20c09fe157a8a34a30e241aaa1fcdade657734f08ab379ecfbeb7d45cc46e878"
         }
       ]
     }

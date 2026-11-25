@@ -8,7 +8,7 @@
 // completely unknown start (global localisation).
 
 import { normalizeAngle, pointSegmentDistance } from "./geometry.js";
-import { corruptOdometry } from "./motion.js";
+import { applyBodyDelta, bodyFromOdometry, corruptBodyDelta, corruptOdometry } from "./motion.js";
 import { sampleField } from "./distance.js";
 
 /** @typedef {import("./geometry.js").Pose} Pose */
@@ -29,6 +29,11 @@ import { sampleField } from "./distance.js";
  *   falls below this fraction of the particle count.
  * @property {OdometryNoise} motionNoise Noise added when propagating particles.
  *   The filter does not know the robot's systematic heading bias.
+ * @property {MotionModel} motionModel How a particle's motion is sampled:
+ *   "odometry" (rot1-trans-rot2, Probabilistic Robotics 5.4; right for robots
+ *   that drive forward and turn) or "omni" (forward, sideways and turn noise in
+ *   the body frame; for holonomic bases such as mecanum, where a strafe would
+ *   otherwise be read as two 90 degree turns).
  * @property {number} alphaSlow Smoothing of the long-term average fit (augmented MCL).
  * @property {number} alphaFast Smoothing of the short-term average fit.
  * @property {number} injectionDeadband Ignore fit drops smaller than this
@@ -36,6 +41,8 @@ import { sampleField } from "./distance.js";
  * @property {number} maxInjection Upper bound on the fraction of particles
  *   replaced by random ones in one resampling step.
  */
+
+/** @typedef {"odometry" | "omni"} MotionModel */
 
 /** @type {Readonly<MclOptions>} */
 export const DEFAULT_MCL = Object.freeze({
@@ -50,6 +57,7 @@ export const DEFAULT_MCL = Object.freeze({
     transFromRot: 0.01,
     headingBias: 0,
   }),
+  motionModel: "odometry",
   alphaSlow: 0.01,
   alphaFast: 0.2,
   injectionDeadband: 0.05,
@@ -164,6 +172,19 @@ export function initializeUniform(pf) {
  * @param {OdometryDelta} measured
  */
 export function predict(pf, measured) {
+  if (pf.options.motionModel === "omni") {
+    const body = bodyFromOdometry(measured);
+    for (let i = 0; i < pf.count; i++) {
+      const d = corruptBodyDelta(body, pf.options.motionNoise, pf.rng);
+      const p = applyBodyDelta({ x: pf.x[i], y: pf.y[i], theta: pf.theta[i] }, d);
+      pf.x[i] = p.x;
+      pf.y[i] = p.y;
+      pf.theta[i] = p.theta;
+    }
+    return;
+  }
+  if (pf.options.motionModel !== "odometry")
+    throw new RangeError(`unknown motion model "${pf.options.motionModel}"`);
   for (let i = 0; i < pf.count; i++) {
     const d = corruptOdometry(measured, pf.options.motionNoise, pf.rng);
     const heading = pf.theta[i] + d.rot1;
@@ -191,6 +212,7 @@ export function updateWeights(pf, scan) {
   const used = [];
   for (let k = 0; k * stride < idx.length; k++) used.push(idx[Math.floor(k * stride)]);
   const { zHit, zRandom } = pf.options;
+  const origin = scan.origin;
   const space = pf.space;
   const logW = new Float64Array(pf.count);
   let maxLog = -Infinity;
@@ -203,10 +225,20 @@ export function updateWeights(pf, scan) {
       continue;
     }
     let ll = 0;
+    let sx = px;
+    let sy = py;
+    let sth = pf.theta[p];
+    if (origin !== undefined) {
+      const c = Math.cos(sth);
+      const s = Math.sin(sth);
+      sx = px + c * origin.x - s * origin.y;
+      sy = py + s * origin.x + c * origin.y;
+      sth += origin.theta;
+    }
     for (const b of used) {
-      const a = pf.theta[p] + scan.angles[b];
+      const a = sth + scan.angles[b];
       const r = scan.ranges[b];
-      const v = sampleField(pf.field, px + r * Math.cos(a), py + r * Math.sin(a));
+      const v = sampleField(pf.field, sx + r * Math.cos(a), sy + r * Math.sin(a));
       ll += Math.log(zHit * v + zRandom);
     }
     // Per-beam geometric mean likelihood: a fit measure in [zRandom, zHit + zRandom].

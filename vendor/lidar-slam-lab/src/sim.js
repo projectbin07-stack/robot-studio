@@ -226,8 +226,11 @@ export function step(sim, v, w) {
   if (sim.pf !== null) {
     predict(sim.pf, measured);
     updateWeights(sim.pf, scan);
-    resampleIfNeeded(sim.pf);
+    // Estimate from the weighted particles, before resampling: resampling may
+    // replace some particles with random ones (recovery), and with the
+    // weights reset to uniform those would pull the mean away from the robot.
     const e = estimate(sim.pf);
+    resampleIfNeeded(sim.pf);
     sim.mclPose = e.pose;
     sim.mclSpread = e.spread;
     const eMcl = positionError(sim.truePose, e.pose);

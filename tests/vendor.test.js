@@ -27,7 +27,7 @@ test("the vendored files match the manifest and the pinned sources", () => {
   assert.equal(ui?.tag, SOURCES[0].kind === "git" ? SOURCES[0].tag : "");
   assert.match(ui?.commit ?? "", /^[0-9a-f]{40}$/);
   const lsl = manifest.sources.find((s) => s.name === "lidar-slam-lab");
-  assert.equal(lsl?.tag, "v0.1.0");
+  assert.equal(lsl?.tag, SOURCES[1].kind === "git" ? SOURCES[1].tag : "");
   assert.match(lsl?.commit ?? "", /^[0-9a-f]{40}$/);
   assert.ok(lsl?.files.some((f) => f.path === "src/scanmatch.js"));
   const three = manifest.sources.find((s) => s.name === "three");

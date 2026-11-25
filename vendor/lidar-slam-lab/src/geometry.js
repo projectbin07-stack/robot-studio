@@ -170,3 +170,20 @@ export function localToWorld(pose, lx, ly) {
   const s = Math.sin(pose.theta);
   return [pose.x + c * lx - s * ly, pose.y + s * lx + c * ly];
 }
+
+/**
+ * Pose composition a (+) b: `b` given in `a`'s frame, returned in the world
+ * frame. Used to place a sensor mounted at `b` on a robot at `a`.
+ * @param {Pose} a
+ * @param {Pose} b
+ * @returns {Pose}
+ */
+export function composePose(a, b) {
+  const c = Math.cos(a.theta);
+  const s = Math.sin(a.theta);
+  return {
+    x: a.x + c * b.x - s * b.y,
+    y: a.y + s * b.x + c * b.y,
+    theta: normalizeAngle(a.theta + b.theta),
+  };
+}

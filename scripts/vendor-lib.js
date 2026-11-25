@@ -93,7 +93,7 @@ export const SOURCES = [
     kind: "git",
     name: "urdf-inspector",
     repo: "https://github.com/projectbin07-stack/urdf-inspector.git",
-    tag: "v0.1.1",
+    tag: "v0.2.0",
     dest: "vendor/urdf-inspector",
     license: "MIT",
     files: ["LICENSE", ...URDF_CORE],
@@ -102,7 +102,7 @@ export const SOURCES = [
     kind: "git",
     name: "lidar-slam-lab",
     repo: "https://github.com/projectbin07-stack/lidar-slam-lab.git",
-    tag: "v0.1.0",
+    tag: "v0.2.1",
     dest: "vendor/lidar-slam-lab",
     license: "MIT",
     files: ["LICENSE", ...LIDAR_SLAM],
@@ -126,6 +126,17 @@ export const SOURCES = [
       "examples/jsm/loaders/collada/ColladaParser.js",
       "examples/jsm/loaders/collada/ColladaComposer.js",
     ],
+  },
+  // axe-core: the accessibility rules engine the browser smoke test injects
+  // (CI only; the Pages workflow does not publish it). MPL-2.0, unmodified.
+  {
+    kind: "npm",
+    name: "axe-core",
+    package: "axe-core",
+    version: "4.14.0",
+    dest: "vendor/axe-core",
+    license: "MPL-2.0",
+    files: ["LICENSE", "axe.min.js"],
   },
 ];
 

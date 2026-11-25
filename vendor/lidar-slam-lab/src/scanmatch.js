@@ -71,7 +71,7 @@ function validBeams(scan, maxBeams) {
 }
 
 /**
- * Mean likelihood-field value of the scan endpoints placed at `pose`.
+ * Mean likelihood-field value of the scan endpoints with the robot at `pose`.
  * @param {LikelihoodField} field
  * @param {Scan} scan
  * @param {Pose} pose
@@ -79,7 +79,7 @@ function validBeams(scan, maxBeams) {
  */
 export function scoreScan(field, scan, pose) {
   const { r, a } = validBeams(scan, Infinity);
-  return scorePoints(field, r, a, pose.x, pose.y, pose.theta);
+  return scorePoints(field, r, a, pose.x, pose.y, pose.theta, scan.origin);
 }
 
 /**
@@ -89,10 +89,21 @@ export function scoreScan(field, scan, pose) {
  * @param {number} x
  * @param {number} y
  * @param {number} theta
+ * @param {Pose} [origin] sensor pose in the robot frame
  * @returns {number}
  */
-function scorePoints(field, r, a, x, y, theta) {
+function scorePoints(field, r, a, x, y, theta, origin) {
   if (r.length === 0) return 0;
+  if (origin !== undefined) {
+    // Robot pose -> sensor pose.
+    const c = Math.cos(theta);
+    const s = Math.sin(theta);
+    const sx = x + c * origin.x - s * origin.y;
+    const sy = y + s * origin.x + c * origin.y;
+    x = sx;
+    y = sy;
+    theta += origin.theta;
+  }
   let sum = 0;
   for (let k = 0; k < r.length; k++) {
     const ang = theta + a[k];
@@ -102,7 +113,8 @@ function scorePoints(field, r, a, x, y, theta) {
 }
 
 /**
- * Find the pose near `guess` at which the scan best fits the map.
+ * Find the robot pose near `guess` at which the scan best fits the map (the
+ * scan's origin, if any, places the sensor on the robot).
  * @param {LikelihoodField} field
  * @param {Scan} scan
  * @param {Pose} guess
@@ -112,7 +124,8 @@ function scorePoints(field, r, a, x, y, theta) {
 export function matchScan(field, scan, guess, options = {}) {
   const o = { ...DEFAULT_MATCH, ...options };
   const { r, a } = validBeams(scan, o.maxBeams);
-  const guessScore = scorePoints(field, r, a, guess.x, guess.y, guess.theta);
+  const origin = scan.origin;
+  const guessScore = scorePoints(field, r, a, guess.x, guess.y, guess.theta, origin);
   /**
    * @param {string} reason
    * @returns {MatchResult}
@@ -137,7 +150,7 @@ export function matchScan(field, scan, guess, options = {}) {
    * @param {number} dth
    */
   const objective = (dx, dy, dth) =>
-    scorePoints(field, r, a, guess.x + dx, guess.y + dy, guess.theta + dth) -
+    scorePoints(field, r, a, guess.x + dx, guess.y + dy, guess.theta + dth, origin) -
     o.priorWeight * ((dx * dx + dy * dy) / lw2 + (dth * dth) / aw2);
 
   let evaluations = 0;
@@ -195,7 +208,7 @@ export function matchScan(field, scan, guess, options = {}) {
     y: guess.y + best.dy,
     theta: normalizeAngle(guess.theta + best.dth),
   };
-  const score = scorePoints(field, r, a, pose.x, pose.y, pose.theta);
+  const score = scorePoints(field, r, a, pose.x, pose.y, pose.theta, origin);
   if (score < o.minScore) {
     return { ...keepGuess("best score below threshold"), evaluations };
   }

@@ -5,6 +5,8 @@
 /** @typedef {import("./geometry.js").Pose} Pose */
 /** @typedef {import("./lidar.js").Scan} Scan */
 
+import { sensorPose } from "./lidar.js";
+
 /**
  * @typedef {object} GridParams
  * @property {number} hit Log-odds added to the cell containing a return.
@@ -144,14 +146,16 @@ function addLogOdds(grid, i, j, delta) {
 }
 
 /**
- * Integrate a scan taken at `pose` into the grid. Beams without a return are
+ * Integrate a scan taken with the robot at `robotPose` into the grid; beams
+ * start at the sensor (the scan's origin). Beams without a return are
  * skipped: a missing return is not evidence that the space is empty, because
  * dropouts and dark surfaces look the same as open space.
  * @param {OccupancyGrid} grid
- * @param {Pose} pose
+ * @param {Pose} robotPose
  * @param {Scan} scan
  */
-export function integrateScan(grid, pose, scan) {
+export function integrateScan(grid, robotPose, scan) {
+  const pose = sensorPose(scan, robotPose);
   const [i0, j0] = worldToCell(grid, pose.x, pose.y);
   const { hit, miss } = grid.params;
   for (let b = 0; b < scan.ranges.length; b++) {

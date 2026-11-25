@@ -117,3 +117,86 @@ export function corruptOdometry(truth, noise, rng) {
     rot2: truth.rot2 + sdRot2 * n3 + noise.headingBias * t,
   };
 }
+
+/**
+ * Relative motion between two poses expressed in the first pose's frame:
+ * forward dx, leftward dy and turn dtheta. Unlike rot1-trans-rot2 this
+ * represents a sideways move (a mecanum strafe) as a sideways move, not as
+ * two 90 degree turns around a straight segment, so noise proportional to
+ * the turn stays small while strafing.
+ * @typedef {{ dx: number, dy: number, dtheta: number }} BodyDelta
+ */
+
+/**
+ * The relative motion from `a` to `b` in `a`'s frame.
+ * @param {Pose} a
+ * @param {Pose} b
+ * @returns {BodyDelta}
+ */
+export function bodyDelta(a, b) {
+  const ex = b.x - a.x;
+  const ey = b.y - a.y;
+  const c = Math.cos(a.theta);
+  const s = Math.sin(a.theta);
+  return { dx: c * ex + s * ey, dy: -s * ex + c * ey, dtheta: normalizeAngle(b.theta - a.theta) };
+}
+
+/**
+ * The same motion as an odometry delta, in the pose's frame: rot1-trans-rot2
+ * and the body delta describe the same end pose.
+ * @param {OdometryDelta} d
+ * @returns {BodyDelta}
+ */
+export function bodyFromOdometry(d) {
+  return {
+    dx: d.trans * Math.cos(d.rot1),
+    dy: d.trans * Math.sin(d.rot1),
+    dtheta: normalizeAngle(d.rot1 + d.rot2),
+  };
+}
+
+/**
+ * Apply a body-frame motion to a pose (the inverse of bodyDelta).
+ * @param {Pose} pose
+ * @param {BodyDelta} d
+ * @returns {Pose}
+ */
+export function applyBodyDelta(pose, d) {
+  const c = Math.cos(pose.theta);
+  const s = Math.sin(pose.theta);
+  return {
+    x: pose.x + c * d.dx - s * d.dy,
+    y: pose.y + s * d.dx + c * d.dy,
+    theta: normalizeAngle(pose.theta + d.dtheta),
+  };
+}
+
+/**
+ * Omnidirectional motion noise: the body delta plus zero-mean noise on each
+ * axis and the systematic heading bias. With t = |(dx, dy)| and r = |dtheta|,
+ * the standard deviations are transFromTrans * |dx| + transFromRot * r forward,
+ * transFromTrans * |dy| + transFromRot * r sideways and rotFromRot * r +
+ * rotFromTrans * t for the turn; headingBias * t is added to the turn. A
+ * pure forward drive therefore gets the same distance noise as in
+ * corruptOdometry, and a strafe gets sideways noise instead of rotation noise.
+ * Three samples are drawn for every call, like corruptOdometry.
+ * @param {BodyDelta} truth
+ * @param {OdometryNoise} noise
+ * @param {Rng} rng
+ * @returns {BodyDelta}
+ */
+export function corruptBodyDelta(truth, noise, rng) {
+  const t = Math.hypot(truth.dx, truth.dy);
+  const r = Math.abs(truth.dtheta);
+  const sdX = noise.transFromTrans * Math.abs(truth.dx) + noise.transFromRot * r;
+  const sdY = noise.transFromTrans * Math.abs(truth.dy) + noise.transFromRot * r;
+  const sdTh = noise.rotFromRot * r + noise.rotFromTrans * t;
+  const n1 = rng.gaussian();
+  const n2 = rng.gaussian();
+  const n3 = rng.gaussian();
+  return {
+    dx: truth.dx + sdX * n1,
+    dy: truth.dy + sdY * n2,
+    dtheta: truth.dtheta + sdTh * n3 + noise.headingBias * t,
+  };
+}
