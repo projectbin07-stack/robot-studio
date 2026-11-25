@@ -104,6 +104,10 @@ export class SimLayer {
     if (!on) {
       this.view.setBase(null);
       this.view.setFloor(null);
+      // The camera and the key light followed the robot through the world;
+      // bring both back to the model at the origin (the view was empty).
+      this.view.followLight(0, 0);
+      this.view.fit();
     }
   }
 
