@@ -328,6 +328,8 @@ function openModel() {
     select(state.selected);
     setStatus(`ready: ${sourceLabel}`);
     document.body.dataset.state = m.error ? "error" : "ready";
+    // For the performance budget (scripts/browser-smoke.mjs --max-open-ms).
+    document.body.dataset.readyAt = String(Math.round(performance.now()));
     document.body.dataset.links = String(m.report?.summary.links ?? 0);
     simUi?.robotChanged();
     simUi?.openFromLink();
