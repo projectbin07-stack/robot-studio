@@ -59,8 +59,8 @@
               <span>or click to choose files</span>
             </label>
             <div class="row">
+              <input type="file" id="folder" class="file-sr" webkitdirectory multiple />
               <label class="button-like" for="folder">Open a folder…</label>
-              <input type="file" id="folder" webkitdirectory multiple hidden />
             </div>
             <label class="field" id="entry-field" hidden
               ><span>File to open</span>
@@ -151,8 +151,8 @@
                 <div class="row">
                   <button type="button" id="world-clear-route">Clear route</button>
                   <button type="button" id="world-save">Save .json</button>
+                  <input type="file" id="world-load" class="file-sr" accept=".json" />
                   <label class="button-like" for="world-load">Load .json</label>
-                  <input type="file" id="world-load" accept=".json" hidden />
                 </div>
                 <p class="note">
                   Drag to draw walls, boxes (a rectangle) and cylinders (centre to radius); click to
@@ -261,7 +261,7 @@
               </button>
             </div>
             <p class="note" id="ros-replay-note" role="status"></p>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Comparison table">
               <table class="ros-topics" id="ros-compare-out" hidden></table>
             </div>
             <div class="row">

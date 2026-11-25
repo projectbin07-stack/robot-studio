@@ -5,6 +5,7 @@
 import { EXAMPLES, exampleFs, findExample } from "../core/examples.js";
 import { loadModel } from "../core/model.js";
 import { sliders } from "../core/scene.js";
+import { treeKeyTarget } from "../core/treenav.js";
 import { CHECKS } from "../../vendor/urdf-inspector/src/core/findings.js";
 import { STUDIO_CHECKS } from "../core/model.js";
 import { decodeState, encodeState } from "./state.js";
@@ -400,22 +401,47 @@ function renderTree(m) {
     host.replaceChildren(h("p", { class: "muted" }, ["No kinematic tree."]));
     return;
   }
-  /** @param {string} link @returns {HTMLElement} */
-  const node = (link) => {
-    const li = h("li", {}, [
-      h("button", { type: "button", class: "t-link", "data-link": link }, [link]),
+  // WAI-ARIA tree view: one Tab stop (the selected entry, else the root),
+  // arrow keys move between entries, Enter or Space selects.
+  /** @param {string} link @param {number} level @returns {HTMLElement} */
+  const node = (link, level) => {
+    const li = h("li", { role: "none" }, [
+      h(
+        "button",
+        {
+          type: "button",
+          class: "t-link",
+          "data-link": link,
+          "data-level": String(level),
+          role: "treeitem",
+          "aria-level": String(level + 1),
+          "aria-selected": "false",
+          tabindex: "-1",
+        },
+        [link],
+      ),
     ]);
     const kids = tree.childJoints.get(link) ?? [];
     if (kids.length) {
-      const ul = h("ul");
+      const ul = h("ul", { role: "group" });
       for (const j of kids) {
-        const jl = h("li", {}, [
-          h("button", { type: "button", class: `t-joint ${j.type}`, "data-joint": j.name }, [
-            `${j.name}`,
-            h("span", { class: "jt" }, [String(j.type)]),
-          ]),
+        const jl = h("li", { role: "none" }, [
+          h(
+            "button",
+            {
+              type: "button",
+              class: `t-joint ${j.type}`,
+              "data-joint": j.name,
+              "data-level": String(level + 1),
+              role: "treeitem",
+              "aria-level": String(level + 2),
+              "aria-selected": "false",
+              tabindex: "-1",
+            },
+            [`${j.name}`, h("span", { class: "jt" }, [String(j.type)])],
+          ),
         ]);
-        const sub = h("ul", {}, [node(j.child)]);
+        const sub = h("ul", { role: "group" }, [node(j.child, level + 2)]);
         jl.append(sub);
         ul.append(jl);
       }
@@ -423,7 +449,11 @@ function renderTree(m) {
     }
     return li;
   };
-  const ul = h("ul", { class: "tree-root" }, [node(tree.root)]);
+  const ul = h(
+    "ul",
+    { class: "tree-root", role: "tree", "aria-label": "Kinematic tree: links and joints" },
+    [node(tree.root, 0)],
+  );
   const orphans = tree.roots.filter((r) => r !== tree.root);
   host.replaceChildren(
     ul,
@@ -438,6 +468,8 @@ function renderTree(m) {
       else select({ kind: "joint", name: /** @type {string} */ (el.dataset.joint) });
     }),
   );
+  const first = host.querySelector("button[role=treeitem]");
+  if (first) first.setAttribute("tabindex", "0");
 }
 
 /** @param {LoadedModel} m */
@@ -561,6 +593,33 @@ function renderFindings() {
 }
 
 // ---------------------------------------------------------------- selection
+/** The tree's single Tab stop: the selected entry, else the first. */
+function rovingTreeStop() {
+  const items = [...$("tree").querySelectorAll("button[role=treeitem]")];
+  if (items.length === 0) return;
+  const stop = items.find((b) => b.classList.contains("selected")) ?? items[0];
+  for (const b of items) b.setAttribute("tabindex", b === stop ? "0" : "-1");
+}
+
+$("tree").addEventListener("keydown", (ev) => {
+  const e = /** @type {KeyboardEvent} */ (ev);
+  const items = /** @type {HTMLElement[]} */ ([
+    ...$("tree").querySelectorAll("button[role=treeitem]"),
+  ]);
+  const at = items.indexOf(/** @type {HTMLElement} */ (document.activeElement));
+  if (at < 0 || e.altKey || e.ctrlKey || e.metaKey) return;
+  const to = treeKeyTarget(
+    e.key,
+    at,
+    items.map((b) => Number(b.dataset.level ?? 0)),
+  );
+  if (to < 0) return;
+  e.preventDefault();
+  items[at].setAttribute("tabindex", "-1");
+  items[to].setAttribute("tabindex", "0");
+  items[to].focus();
+});
+
 /** @param {{ kind: "link" | "joint", name: string } | null} sel */
 function select(sel) {
   const tree = model?.report?.context?.tree;
@@ -573,8 +632,10 @@ function select(sel) {
       sel !== null &&
       (sel.kind === "link" ? el.dataset.link === sel.name : el.dataset.joint === sel.name);
     el.classList.toggle("selected", on);
+    el.setAttribute("aria-selected", String(on));
     if (on) el.scrollIntoView({ block: "nearest" });
   }
+  rovingTreeStop();
   const link =
     sel === null
       ? null

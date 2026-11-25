@@ -5,10 +5,11 @@
   --text: #1c2430;
   --muted: #5c6776;
   --line: #d9dee5;
-  --accent: #2a78d6;
+  --accent: #1b63b8;
+  --on-accent: #ffffff;
   --accent-2: #eb6a1f;
   --error: #c62f2f;
-  --warning: #b36b00;
+  --warning: #9a5b00;
   --info: #2a6fb3;
   --sel: #fff1e3;
   --radius: 10px;
@@ -25,6 +26,7 @@
   --muted: #98a2b0;
   --line: #2c323b;
   --accent: #5aa2f0;
+  --on-accent: #0f1216;
   --accent-2: #ff8a3d;
   --error: #ff6b6b;
   --warning: #f0b04a;
@@ -90,9 +92,17 @@ button:hover,
 button:focus-visible,
 select:focus-visible,
 input:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+a:focus-visible,
+canvas:focus-visible,
+[tabindex]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* The selected tree entry keeps its own outline; focus adds a thicker one. */
+.tree button.selected:focus-visible {
+  outline: 2px solid var(--accent);
 }
 
 .top {
@@ -211,10 +221,31 @@ summary:focus-visible {
   opacity: 0;
 }
 
+/* File inputs shown as a button-like label: kept in the tab order (a hidden
+   input cannot be reached with the keyboard); the label shows the focus. */
+.file-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+
+.file-sr:focus-visible + .button-like {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.drop:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .row {
   display: flex;
   gap: 8px;
   margin: 8px 0;
+  position: relative;
 }
 
 .field {
@@ -340,7 +371,7 @@ summary:focus-visible {
 .jt {
   margin-left: 6px;
   font-size: 11px;
-  opacity: 0.8;
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------ viewport */
@@ -418,7 +449,7 @@ summary:focus-visible {
 .seg button[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .hint {
@@ -807,7 +838,7 @@ button.danger:hover {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: #fff;
-  background: #8a5cf6;
+  background: #6d3fdc;
   border-radius: 4px;
   padding: 1px 5px;
 }

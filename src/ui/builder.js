@@ -183,7 +183,13 @@ export function renderTemplateForm(host, t, params, onChange) {
       g.append(row(p.label.replace(/^.*? (position|roll pitch yaw)$/, "$1"), inputs, unit));
     } else if (p.kind === "text") {
       const input = /** @type {HTMLInputElement} */ (
-        h("input", { type: "text", value: String(v), "data-param": p.key, spellcheck: "false" })
+        h("input", {
+          type: "text",
+          value: String(v),
+          "data-param": p.key,
+          "aria-label": p.label,
+          spellcheck: "false",
+        })
       );
       input.addEventListener("change", () => onChange(p.key, input.value.trim()));
       g.append(row(p.label, [input]));
@@ -203,7 +209,15 @@ export function renderTemplateForm(host, t, params, onChange) {
       );
     }
   }
+  // Re-rendering after a parameter edit keeps the keyboard focus on the same
+  // field (it used to move to the page body).
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
+  const focused = active && host.contains(active) ? active.dataset.param : undefined;
   host.replaceChildren(...groups.values());
+  if (focused !== undefined)
+    /** @type {HTMLElement | null} */ (
+      host.querySelector(`[data-param="${CSS.escape(focused)}"]`)
+    )?.focus();
 }
 
 // ---------------------------------------------------------------- properties
