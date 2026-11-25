@@ -236,8 +236,8 @@ try {
         // try the older name
       }
     }
-    if (granted === null)
-      throw new Error("this browser has no Local Network Access permission to grant");
+    // A browser without Local Network Access has nothing to grant (and nothing to block).
+    if (granted === null) granted = "none (this browser has no local network permission)";
   }
   if (values.theme === "light" || values.theme === "dark")
     await s("Emulation.setEmulatedMedia", {
@@ -378,6 +378,7 @@ try {
   if (values.axe) report.axe = await runAxe(evaluate);
   if (openMs !== null) report.openMs = openMs;
   if (granted !== null) report.grantedPermissions = granted;
+  report.browser = version.Browser;
   report.consoleErrors = errors;
   if (values.builder) report.builder = builder;
   if (values.sim) report.sim = sim;
