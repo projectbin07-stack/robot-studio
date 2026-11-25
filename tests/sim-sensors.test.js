@@ -5,6 +5,7 @@
 // the depth camera, and the estimator wrapper against lidar-slam-lab's own
 // loop.
 
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
@@ -555,4 +556,22 @@ test("depth camera: a point cloud on the floor and the obstacles in view", () =>
   );
   for (let k = 0; k < 10; k++) step(sim, { vx: 0, vy: 0, wz: 0 });
   assert.ok(sim.cloud && sim.cloudPoints > 0);
+});
+
+test("a combined file written by imu-calibration-lab 0.2.0's CLI (combine) is read as the IMU error model", () => {
+  // tests/fixtures/imu-calibration-lab-0.2.0-combined.json: accel, gyro and mag
+  // --json results of imu-calibration-lab's example logs, merged with
+  // `imu-calibration-lab combine` (its v0.2.0 tag).
+  const text = readFileSync(
+    new URL("./fixtures/imu-calibration-lab-0.2.0-combined.json", import.meta.url),
+    "utf8",
+  );
+  const file = JSON.parse(text);
+  assert.equal(file.generator, "imu-calibration-lab 0.2.0");
+  const m = imuModelFromCalibration(file);
+  assert.match(m.source, /accelerometer bias and matrix/);
+  assert.match(m.source, /gyroscope bias, scale and noise/);
+  // The accelerometer bias is taken over in m/s^2 (the file is in g).
+  for (let k = 0; k < 3; k++)
+    assert.ok(Math.abs(m.accelBias[k] - file.accel.bias[k] * 9.80665) < 1e-9);
 });
