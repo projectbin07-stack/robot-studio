@@ -169,7 +169,7 @@ jobs:
         with:
           node-version: "24"
       - name: Clone lidar-slam-lab at the vendored tag
-        run: git -c advice.detachedHead=false clone --quiet --depth 1 --branch v0.1.0 https://github.com/projectbin07-stack/lidar-slam-lab.git lsl
+        run: git -c advice.detachedHead=false clone --quiet --depth 1 --branch v0.2.1 https://github.com/projectbin07-stack/lidar-slam-lab.git lsl
       - name: Reference runs through Robot Studio's estimator wrapper vs lidar-slam-lab's CLI benchmark (every printed number), then the full simulation on the same maps
         run: node scripts/lsl-crosscheck.mjs --lsl lsl --seeds 5 --full-seeds 1
 
