@@ -35,6 +35,8 @@ jobs:
           cp index.html styles.css _site/
           cp -r src/core src/ui _site/src/
           cp -r vendor examples _site/
+          # axe-core is for the browser tests only.
+          rm -rf _site/vendor/axe-core
           touch _site/.nojekyll
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
@@ -53,3 +55,47 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # Screenshots for the documentation pages, taken from the live site once it
+  # serves this commit. The ROS 2 live view connects from the https site to a
+  # fake rosbridge server on the runner (simulated fixture data), with the
+  # browser's local network permission granted over DevTools.
+  screenshots:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      - name: Wait until the live site serves this commit's page
+        run: |
+          want=$(sha256sum index.html | cut -d' ' -f1)
+          for i in $(seq 1 60); do
+            got=$(curl -fsS "https://projectbin07-stack.github.io/robot-studio/index.html?nocache=$i" | sha256sum | cut -d' ' -f1 || true)
+            if [ "$got" = "$want" ]; then echo "live site is current"; exit 0; fi
+            sleep 10
+          done
+          echo "the live site did not serve this commit within 10 minutes"; exit 1
+      - name: Screenshots of every feature from the live site
+        run: |
+          mkdir shots
+          node scripts/fake-rosbridge.mjs --port 9090 --fixture tests/fixtures/rosbridge/sim_mecanum.jsonl --description tests/fixtures/rosbridge/robot_description.urdf --log rb.jsonl &
+          node bin/robot-studio.js sim mecanum --world office --route demo --seconds 20 --seed 1 --out rec > /dev/null
+          (cd rec && python3 -m zipfile -c ../rec.zip .)
+          sleep 1
+          L="https://projectbin07-stack.github.io/robot-studio/"
+          S="node scripts/browser-smoke.mjs --browser /usr/bin/google-chrome --timeout 240000"
+          $S --url "$L" --theme light --tour --shots shots/first-run
+          $S --url "${L}?theme=light" --select-link base_link --expect-links 11 --screenshot shots/model.png
+          $S --url "${L}?theme=light" --template arm --select-link link_3 --expect-links 9 --screenshot shots/builder.png
+          $S --url "${L}?theme=light" --template mecanum --sim --sim-world office --sim-route demo --sim-seconds 20 --expect-links 10 --screenshot shots/simulation.png
+          $S --url "${L}?theme=light" --template mecanum --ros ws://127.0.0.1:9090 --grant-local-network --ros-keep-armed --ros-log rb.jsonl --expect-links 10 --screenshot shots/ros2-live.png
+          $S --url "${L}?theme=light" --template mecanum --replay rec.zip --expect-links 10 --screenshot shots/ros2-replay.png
+          $S --url "${L}?theme=dark" --width 390 --height 844 --mobile --expect-links 11 --screenshot shots/phone.png
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: docs-screenshots
+          path: shots/
+          if-no-files-found: ignore
